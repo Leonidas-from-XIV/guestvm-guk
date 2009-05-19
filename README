@@ -1,0 +1,76 @@
+#
+# Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
+# Clara, California 95054, U.S.A. All rights reserved.
+# 
+# U.S. Government Rights - Commercial software. Government users are
+# subject to the Sun Microsystems, Inc. standard license agreement and
+# applicable provisions of the FAR and its supplements.
+# 
+# Use is subject to license terms.
+# 
+# This distribution may include materials developed by third parties.
+# 
+# Parts of the product may be derived from Berkeley BSD systems,
+# licensed from the University of California. UNIX is a registered
+# trademark in the U.S.  and in other countries, exclusively licensed
+# through X/Open Company, Ltd.
+# 
+# Sun, Sun Microsystems, the Sun logo and Java are trademarks or
+# registered trademarks of Sun Microsystems, Inc. in the U.S. and other
+# countries.
+# 
+# This product is covered and controlled by U.S. Export Control laws and
+# may be subject to the export or import laws in other
+# countries. Nuclear, missile, chemical biological weapons or nuclear
+# maritime end uses or end users, whether direct or indirect, are
+# strictly prohibited. Export or reexport to countries subject to
+# U.S. embargo or to entities identified on U.S. export exclusion lists,
+# including, but not limited to, the denied persons and specially
+# designated nationals lists is strictly prohibited.
+# 
+#
+
+GuestVM Microkernel
+===================
+
+The GuestVM Microkernel (GUK) is a derivative of the Xen Minimal OS
+(mini-os) that is used to support the Guest VM Java platform. It can
+be run stand-alone, although there is some code that assumes that it
+is supporting Guest VM, or at least a JVM.
+
+It requires a 64-bit x86 machine and hypervisor.
+
+Building
+========
+
+Set the environment variable XEN_ROOT to the root of your Xen distribution
+and then execute gmake.
+
+The debugging support and file-system support via sibling Linux guest
+are in tools/db-front and tools/fs-back, respectively. There are not
+built by default as they must be built on Linux and installed in the
+Linux guest in which they will execute.
+
+Running
+=======
+
+To start it do the following in domain0 (assuming xend is running)
+
+# xm create -c domain_config
+
+This starts the kernel and then once every second prints the system time.
+
+If the environment variable BRIDGE is set to the name of the network bridge
+then incoming network packets are also reported on the console.
+
+License
+=======
+
+The GuestVM Microkernel is licensed under GPL V2.
+
+More Info
+=========
+
+More documentation can be found in the "docs" directory.
+
+Mick Jordan, Sun Microsystems Inc., May 2009.

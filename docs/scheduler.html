@@ -1,0 +1,381 @@
+<!--
+#
+# Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
+# Clara, California 95054, U.S.A. All rights reserved.
+# 
+# U.S. Government Rights - Commercial software. Government users are
+# subject to the Sun Microsystems, Inc. standard license agreement and
+# applicable provisions of the FAR and its supplements.
+# 
+# Use is subject to license terms.
+# 
+# This distribution may include materials developed by third parties.
+# 
+# Parts of the product may be derived from Berkeley BSD systems,
+# licensed from the University of California. UNIX is a registered
+# trademark in the U.S.  and in other countries, exclusively licensed
+# through X/Open Company, Ltd.
+# 
+# Sun, Sun Microsystems, the Sun logo and Java are trademarks or
+# registered trademarks of Sun Microsystems, Inc. in the U.S. and other
+# countries.
+# 
+# This product is covered and controlled by U.S. Export Control laws and
+# may be subject to the export or import laws in other
+# countries. Nuclear, missile, chemical biological weapons or nuclear
+# maritime end uses or end users, whether direct or indirect, are
+# strictly prohibited. Export or reexport to countries subject to
+# U.S. embargo or to entities identified on U.S. export exclusion lists,
+# including, but not limited to, the denied persons and specially
+# designated nationals lists is strictly prohibited.
+# 
+#
+-->
+<HTML>
+<HEAD>
+<TITLE>Project Guest VM: Microkernel: Thread Scheduling</TITLE>
+<BODY>
+<H1>Project Guest VM: Microkernel: Thread Scheduling</H1>
+<H2>Introduction</H2>
+
+The GuestVM microkernel scheduler is an evolution of the Mini-OS
+scheduler that is preemptive and supports multiple cpus; concurrent
+access to global state is serialized with spinlocks.  The scheduler
+has also been extended so that it can, as a runtime option, delegate
+the scheduling of a class of threads to an external agent through a
+simple upcall interface. This is used, for example, in Guest VM to
+schedule Java threads separately from microkernel threads.  Although
+there is no hardware separation between "kernel" mode and "user" or
+"application" mode in GUK, we will refer to the two schedulers as the
+"microkernel" scheduler and the "application" scheduler in what
+follows.
+<p>
+Threads are kept in several lists according to their state.  All
+runnable threads are stored in <code>ready_queue</code>, sleeping threads are
+stored in <code>sleep_queue</code> and dying threads in <code>zombie_queue</code>, all of which
+are protected by individual spin locks.
+<p>
+The scheduler executes on whatever CPU is active when it is invoked.
+Thread switching occurs in the <code>schedule()</code> function which is typically
+called from other methods, e.g. <code>block()</code> to block a thread from running
+(and therefore schedule some other thread).  The scheduler iterates
+through the ready queue and picks the first thread which is runnable
+and not currently running on another cpu to be scheduled next.  
+If no thread in the ready queue is runnable the idle thread for the
+current CPU is scheduled. Note that threads migrate between CPUs according
+to what CPU happens to be running the scheduler when they are at the head of the
+ready queue. No attempt is made in the microkernel scheduler to stick threads to CPUs; 
+that is left to the application scheduler.
+<p>
+Preemption is supported by setting up a timer interrupt, which, when
+executed, checks whether the current thread can and should be
+preempted.  Another preemption point is when a thread reenables
+preemption after previously explicitly disabling it.  
+
+
+<H2>Data structures</H2>
+
+<h3>Thread</h3>
+
+C-type: struct thread
+<pre>
+<code>
+Members:
+
+int               preempt_count;        /*  0 => preemptable,
+				           >0 => preemption disabled */
+				        /* offset 0 (used in x86_64.S) */
+u32               flags;                /* offset 4 */
+struct pt_regs    *regs;                /* Registers on the trap frame only
+                                           valid when interrupted */
+				        /* offset 8 */
+uint16_t          id;                   /* thread id */
+int16_t           java_id; 
+int16_t           guk_stack_allocated;  /* true if GUK allocated the stack */
+char              *name;                /* name of the thread */
+char              *stack;               /* address of the thread's stack region */
+unsigned long     stack_size;           /* size of the stack */
+void              *specific;            /* for arbitrary data */
+u64               timeslice;            /* timeslice for this thread */
+u64               resched_running_time; /* time when to preempt this thread */
+unsigned int      cpu;                  /* cpu the thread is running on */
+int               lock_count;           /* count of spin locks held - for debugging */
+unsigned long     sp;                   /* stack pointer for thread startup */
+unsigned long     ip;                   /* instruction pointer for thread startup */
+struct list_head  thread_list;          /* links thread in the global thread list */
+struct list_head  ready_list;           /* links thread into run, zombie and joiner queues */
+struct list_head  joiners;              /* list of threads that wait for this thread to die */
+struct list_head  aux_thread_list;      /* not really needed, could use ready_list */
+</code>
+</pre>
+<p>
+Note that threads may be created with and without explicitly provided stacks,
+indicated by the guk_stack_allocated member. In the latter case GUK
+allocates a stack of fixed size. This is used for the GUK service
+threads. Application threads typically provide their own stack. 
+
+<h3>Thread State Flags</h3>
+
+All flags have inline functions to set, clear, and query their bits.  the
+function are all lower case, the ending <code>_FLAG</code> ommitted and take a pointer to
+a thread structure as argument.  The setters start with <code>set_</code> to set a bit,
+<code>clear_</code> clears the flag and <code>is_</code> returns true if the specified flag is
+set.  If the <code>RESCHED_FLAG</code> is set <code>need_resched()</code> returns true.
+<pre>
+<code>
+#define RUNNABLE_FLAG           /* Thread can be run on a CPU */
+#define RUNNING_FLAG            /* Thread is currently running */
+#define RESCHED_FLAG            /* Scheduler should be called at the first opportunity.
+                                   WARN: flag used explicitly in 86_64.S, don't change */
+#define DYING_FLAG              /* Thread scheduled to die */
+#define REQ_DEBUG_SUSPEND_FLAG  /* Thread is to be put to sleep in response to suspend request/breakpoint */
+#define STEPPING_FLAG           /* Thread is to be single stepped */
+#define DEBUG_SUSPEND_FLAG      /* Thread was actually put to sleep because of REQ_DEBUG_SUSPEND */
+#define INTERRUPTED_FLAG        /* Thread was interrupted during last wait */
+#define UKERNEL_FLAG            /* Thread is a GuestVM microkernel thread */
+#define JOIN_FLAG               /* Thread is waiting for joinee */
+#define AUX1_FLAG               /* Predefined spare flag */
+#define AUX2_FLAG               /* Predefined spare flag */
+#define SLEEP_FLAG              /* Sleeping */
+#define APPSCHED_FLAG           /* Thread is attached to the application scheduler */
+</code>
+</pre>
+
+Threads are partitioned into two classes, "microkernel" threads and "application" threads,
+indicated by the presence or absence of the <code>UKERNEL_FLAG</code> bit, respectively. 
+
+<h3>CPU private data</h3>
+
+C-type: struct cpu_private
+<p>
+The cpus "gs" register points to its cpu private data.  The offsets into the
+members are used by assembler code, hence if this structure is changed the
+assembler code in x86_64.S has to be changed too.
+<p>
+Members:
+<pre>
+<code>
+int                     irqcount;        /* this and the following members
+                                            are only used in x86_64.S  */
+unsigned long           irqstackptr;     /* to calculate the correct stack
+                                            pointer on an interrupt    */
+struct thread           *idle_thread;    /* the idle thread for this cpu
+struct thread           *current_thread; /* current running thread */
+int                     cpunumber;       /* id of this cpu */
+int                     upcall_count;    /* count nested hypervisor upcalls */
+struct shadow_time_info shadow_time;     /* calculate the correct time */
+int                     cpu_present;     /* true if the cpu is online */
+evtchn_port_t           ipi_port;        /* event port for IPI events */
+</code>
+</pre>
+
+<h3>Thread queues</h3>
+
+Thread queues are doubly linked lists of thread structures, using the
+standard Linux list.h macros. There are four main queues, thread, ready, sleep and
+zombie, each protected by spin locks. All threads, regardless of their state are
+in the thread queue, which is only used for debugging and tracing activites.
+Runnable threads are in the ready queue, which is global to all CPUs. Sleeping
+threads are in the sleep queue, and dying, but not dead threads, are in the zombie queue.
+Threads blocked for other reasons may be on other lists managed by other code.
+
+
+<h3>Spin locks</h3>
+
+C-type: struct spinlock
+
+Members:
+<pre>
+<code>
+int slock        /* the lock status */
+int break_lock   /* the following two members handle stuck locks */
+int spin_count
+</code>
+</pre>
+
+The most used methods are <code>spin_lock</code> and <code>spin_unlock.</code> Calls that also disable
+interrupts are <code>spin_lock_irqsave</code> and <code>spin_unlock_irqrestore.</code> The former
+returns the interrupts flags as long and the latter call take the interrupt
+flags as argument. The raw spinlocks, defined in
+include/x86/arch_spinlock.h, encapsulate the assembler code and perform
+atomic operations on the slock member of the structure.  The actual spinning
+is implemented in spinlock.c in the C, which supports detecting stuck locks
+and preemption.  Preemption is disabled at the start of the spin loop and
+enabled again if the lock cannot be aquired.  Then the lock operation
+increments the spin count and checks whether it got stuck trying to acquire
+this lock.  A spinlock is consider stuck if it spins for more than
+SPIN_LOCK_MAX (currently set to 100000000) iterations. after that GUK prints
+an error and exits.
+
+<H2>Operational Details</H2>
+
+<h3>Scheduling</h3>
+
+The scheduling depends on the class of thread and whether an
+application scheduler has been registered. If not, GUK schedules all
+threads as if they were microkernel threads. Otherwise it delegates
+all relevant operations for application threads to the application
+scheduler. In particular, when the application scheduler is active,
+application threads are never placed on the ready queue, that is, the
+GUK scheduler only schedules microkernel threads. If any microkernel
+thread is runnable it will run in preference to any application
+thread. In that sense, microkernel threads are of intrinsically higher priority than
+application threads.  Note, however, that most microkernel threads run
+infrequently and for very short durations. If there are no runnable
+microkernel threads, the application scheduler is called and, if it
+returns a thread, it will run. Otherwise the idle thread for the CPU
+will run.  Within the microkernel scheduler no priority-based or fair
+scheduling is available, it is simple round robin
+scheduling. Sophisticated scheduling is left to the application
+scheduler.
+<p>
+When a microkernel thread is first created it is not assigned a CPU,
+but is made runnable and placed on the ready queue. It will therefore
+execute on whatever CPU is executing the scheduler when it is at the
+head of the ready queue.  For application threads, if the application
+scheduler is active, it is upcalled to assign a CPU for the thread. The
+microkernel scheduler takes care never to switch application threads
+between CPUs if the application scheduler is active.
+
+
+<h3>Preemption</h3>
+
+A thread can be preempted if the preempt_count in its thread structure is
+zero.  Invoking preempt_disable increases this counter, and preempt_enable
+decreases the counter.
+<p>
+Preemption is implemented in two steps.  First, a flag called
+<code>RESCHED_FLAG</code> in the thread structure signals whether this thread
+should be preempted or not.  The <code>RESCHED_FLAG</code> flag is set by the timer
+interrupt when the thread has run for its allocated time.  Second, on
+return from interrupt (symbol <code>retint_kernel</code> in x86_64.S) or when
+preemption is explicitly enabled by the preempt_enable call, if the
+<code>RESCHED_FLAG</code> flag is set the thread is preempted.
+<p>
+The current thread is preempted on return from interrupt as follows. If
+preempt_count for the current thread is zero and interrupts are enabled and
+need_resched is set, the <code>retint_kernel</code> handler saves the state of the thread
+on its stack and invokes <code>preempt_schedule_irq</code> instead of returning to the
+thread.  <code>preempt_schedule_irq</code> marks the current thread as preempted by
+adding a magic number to its preempt_count.  Then it enables interrupts and
+calls the scheduler, which will schedule another thread if possible.  When
+the scheduler reschedules the previously preempted thread (i.e. on return
+from the schedule call in <code>preempt_schedule_irq)</code> interrupts are disabled
+again and the magic number is subtracted from its preempt_count.  Before
+returning to <code>retint_kernel</code> the RESCHED_FLAG is checked again, in order
+to not miss a preemption opportunity.
+<p>
+The preemption code in <code>preempt_enable</code> checks only the RESCHED_FLAG flag, and
+if set invokes <code>preempt_schedule,</code> which immediately returns if
+<code>preempt_count</code> is not zero or interrupts are disabled.  Otherwise
+<code>preempt_schedule</code> continues by invoking the scheduler.  When the scheduler
+restarts the thread, the RESCHED_FLAG flag is examined again, in order to
+not miss a preemption opportunity.
+
+<h3>SMP Support</h3>
+
+Multiple processors are supported by using cpu private data and the use of
+spinlocks to protect global data. On boot up only the first cpu is active.
+The other cpus are brought up by invoking <code>init_smp</code>.   It initiates the gs
+register of the first cpu to point to its private data, and then brings up
+the rest of the available cpus by setting up a context struct and sending
+the context to the hypervisor via the <code>VCPUOP_initialise</code> hypercall.  The
+context struct is setup to run an idle thread and the <code>gs</code> register of the
+context is set to the private data of the cpu to bring up.  Note that in the
+first cpu the <code>gs</code> register is set directly, whereas for all other cpus the
+value of the <code>gs</code> register is passed down to the hypervisor, which will
+initialize the other cpu with the provided value.
+
+<H3>The Idle Thread(s)</h3>
+
+The idle thread is a special kernel thread that runs off the initial context
+in the first cpu. Every further cpu that is brought up has its own private
+idle thread.  The idle thread runs an infinite loop that starts by calling
+the scheduler.  Then it looks for dead threads in the run queue and frees
+their allocated memory.  After that it calculates when the first thread in
+the sleep queue is supposed to wake up, and calls into the hypervisor to
+suspend this cpu (i.e. schedule another guest if possible), until the time
+to wake up the first thread.  After the hypervisor calls returns, the idle
+thread reactivates the threads with a wake up time smaller or equal to the
+current time. Then it goes back to the beginning of the loop and calls the
+scheduler again.
+
+<H2>The Application Scheduler</H2>
+
+The rationale behind having separate microkernel and application scheduler
+is to provide stability for the basic microkernel services using the very simple
+and tested microkernel scheduler, while allowing experimentation with
+scheduling algorithms for application threads. The interface between 
+the microkernel and application scheduler is through a series of upcalls
+that handle the key scheduling events.
+
+Preemption is disabled while an upcall is active and an upcall may execute in
+an interrupt (event) context. Therefore all synchronization must be via spinlocks
+that disable events, i.e., <code>spin_lock_irq_save/spin_unlock_irq_restore</code>.
+
+<H3>Upcall Signatures</H3>
+
+<pre>
+<code>
+/*
+ * Reschedule the current application thread and return a thread that should
+ * run next. Shall return NULL if no threads are available to run
+ *
+ */
+typedef struct thread *(*sched_call)(int cpu);
+
+/* Deschedule the current application thread.
+ * Invoked if the current thread was an application thread and 
+ * the microkernel will run a microkernel thread
+ */
+typedef void (*desched_call)(int cpu);
+
+/*
+ * Wake up a thread, i.e., make it runnable
+ */
+typedef int (*wake_call)(int id, int cpu);
+
+/*
+ * Block a thread , i.e. make it not runnable
+ */
+typedef int (*block_call)(int id, int cpu);
+
+/*
+ * /* Attach a new application thread */
+ */
+typedef int (*attach_call)(int id, unsigned int *flags, int cpu);
+
+/*
+ * Detach a dying thread
+ */
+typedef int (*detach_call)(int id, int cpu);
+
+/* Pick an initial CPU for a new thread */
+typedef int (*pick_cpu_call)(void;
+
+/* 
+ *Is there a runnable thread for cpu
+ */
+typedef int (*runnable_call)(int cpu);
+
+/* register scheduler upcalls */
+extern int guk_register_upcalls(
+	sched_call sched_func,
+	desched_call desched_func,
+	wake_call wake_func,
+	block_call block_func,
+	attach_call attach_func,
+	detach_call detach_func,
+        pick_cpu_call pick_cpu_func,
+	runnable_call runnable_func);
+</code>
+</pre>
+
+<H3>Runtime Options </H3>
+The following command line options are available to control the behavor of the scheduler:
+<ul>
+<li><b>-XX:GUKAS</b> enable an application scheduler
+<li><b>-XX:GUKTS=N</b> set default thread timeslice to N milliseconds
+</ul>
+</BODY>
+</HTML>

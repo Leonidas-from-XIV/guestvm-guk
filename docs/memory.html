@@ -1,0 +1,269 @@
+<!--
+#
+# Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
+# Clara, California 95054, U.S.A. All rights reserved.
+# 
+# U.S. Government Rights - Commercial software. Government users are
+# subject to the Sun Microsystems, Inc. standard license agreement and
+# applicable provisions of the FAR and its supplements.
+# 
+# Use is subject to license terms.
+# 
+# This distribution may include materials developed by third parties.
+# 
+# Parts of the product may be derived from Berkeley BSD systems,
+# licensed from the University of California. UNIX is a registered
+# trademark in the U.S.  and in other countries, exclusively licensed
+# through X/Open Company, Ltd.
+# 
+# Sun, Sun Microsystems, the Sun logo and Java are trademarks or
+# registered trademarks of Sun Microsystems, Inc. in the U.S. and other
+# countries.
+# 
+# This product is covered and controlled by U.S. Export Control laws and
+# may be subject to the export or import laws in other
+# countries. Nuclear, missile, chemical biological weapons or nuclear
+# maritime end uses or end users, whether direct or indirect, are
+# strictly prohibited. Export or reexport to countries subject to
+# U.S. embargo or to entities identified on U.S. export exclusion lists,
+# including, but not limited to, the denied persons and specially
+# designated nationals lists is strictly prohibited.
+# 
+#
+-->
+<HTML>
+<HEAD>
+<TITLE>Project Guest VM: Microkernel: Memory Management</TITLE>
+<BODY>
+<H1>Project Guest VM: Microkernel: Memory Management</H1>
+<H2>Introduction</H2>
+
+Paravirtualized guests running on Xen have three different memory addresses: machine
+addresses used by Xen, pseudo-physical addresses provided by Xen
+to the Guest and virtual addresses that are mapped by the guest to
+pseudo-physical addresses. The machine address space is 0x0 up to the
+installed memory in the machine. The pseudo-physical address space
+runs from address 0x0 up to the specified amount of memory in the
+domain configuration script. I.e., Xen provides the illusion of a
+continuous physical address space for each guest starting at 0x0.  Therefore, a
+guest is not generally aware of machine adresses and considers its
+pseudo-physical address space as its actual machine memory.  However,
+there is one exception: pagetables, which affects only the code in the
+low-level pagetable management that GUK implements in arch/x86/mm.c.  
+<p>
+In GUK all of the pseudo-physical address space is mapped 1-1 to the
+same virtual address range, as per Mini-OS, and the mapping is not
+changed afterwards (except to support ballooning). Note, the first
+page is not used and marked as not present in order to catch NULL
+pointer errors. However, support is provided to establish additional
+virtual mappings and it is expected that this will be the primary mode
+of operation.
+
+Therefore, GUK implements a simple dynamic memory allocator in mm.c
+that provides new memory in page granularity. Since, in a Java virtual
+machine, the interesting memory mangement happens at the Java level,
+the page allocator is quite simple, using a first-fit scheme with a bitmap to record
+allocated pages, that replaces the original buddy algorithm in
+Mini-OS. Support is provided for memory ballooning which can result in
+holes in the initial 1-1 physical/virtual address space.
+
+<H2>Memory layout</H2> 
+
+Two domain configuration variables control the
+memory allocated to a domain, <code>memory</code> and <code>maxmem.</code> The former is the
+initial allocation to a domain and the latter is the maximum that is
+available for extension while the domain is running. The default
+configuration file for GUK (domain_config) sets <code>memory=32</code> and
+<code>maxmem=128</code>.
+
+This is the pseudo physical address layout in GUK when using
+the default domain configuration. The <code>pt_base</code> value is provided dynamically at
+boot time in the <code>start_info</code> structure. It is the start address of the
+initial pagetables. The number of initial pagetable pages is in
+<code>start_info.nr_pt_frames</code>.
+
+<pre>
+<code>
+0x00000000 - 0x00001000   : is not used and not mapped.
+0x00001000 - 0x00002000   : is a shared page between the hypervisor and
+                             GUK containing startup information
+0x00002000 - 0x00003000   : is the hypercall page, through which
+                             hypercalls to Xen are initiated
+0x00003000 - &_end        : GUK code and data
+pt_base    - +nr_pt_frames: initial pagetable pages setup by the hypervisor
++nr_pt_frames - +3 pages  : not used (why?)
++3 pages   - +pt_frames   : GUK pagetable pages
++pt_frames - 0x02000000   : available for dynamic memory allocation
+0x02000000 - 0x80000000   : available for increased memory reservation from Xen
+0xMaxRAM - MaxRAM+0x4000  : grant table pages (for mapped in foreign pages)
+</code>
+</pre>
+
+Note that the grant table pages are mapped in at the virtual address that corresponds
+to the physical address just beyond the maximum RAM on the machine. E.g., for an 8GB
+machine MaxRAM is 0x200000000.
+
+<H2>Pagetables</H2>
+
+Since a guest running on Xen manages its pagetables used by the MMU,
+the guest has to use the actual machine addresses as the page-table
+entries.  Thus, Xen enumerates all pages in both address spaces.
+Machine page numbers go from 0 up to the installed amount memory in
+the machine.  Pseudo-physical page numbers go from 0 up to the maximum domain
+memory.  Each pseudo-physical page is mapped to exactly one machine
+page.
+<p>
+Two arrays maintain the relationship between pseudo-physical memory
+pages and machine memory pages.  The first, <code>phys_to_machine_mapping</code>,
+is managed by GUK and is provided by Xen on startup.  The array maps
+from pseudo-physical page numbers to the corresponding machine page.
+It is initially sized for the amount of allocated memory on domain
+startup.  For convenience, GUK reallocates this array to be large
+enough for <code>maxmem</code> to simplify any later memory increases.
+<p>
+The second array, <code>machine_to_phys_mapping</code>, is managed by Xen and is
+accessible from GUK.  It maps from machine pages to pseudo-physical
+memory pages. This array is global to all domains so it only makes
+sense to index this array with a machine page index that was
+previously returned from <code>phys_to_machine_mapping</code>. Its primary use is
+to map back to pseudo-physical memory from a page table entry, which
+always contain machine addresses.
+<p>
+GUK uses two macros (defined in include/x86/arch_mm.h) that translate
+between the two page numbering schemes: <code>pfn_to_mfn</code> converts
+pseudo-physical page numbers into machine page numbers and
+<code>mfn_to_pfn</code> converts machine page numbers into pseudo-physical page
+numbers, using the array described above.  Pagetable entries have to
+use machine page numbers instead of pseudo-physical page numbers.  The
+pagetables are not writable by the guest and modifications to it are
+done by the hypercall <code>mm_update</code> .
+<p>
+On startup the hypervisor initiates the pagetables such that the GUK
+code and data is correctly mapped. The setup is performed by the
+<code>arch_init_mm</code> procedure in arch/x86/mm.c, and is basically
+similar to Mini-OS although the code has benn restructured
+somewhat. The initial mapped area is always a multiple of 4MB.  For
+instance, booting just GUK with a periodic thread can be done in the
+first 4MB. Which requires 5 pagetable pages: Two level 1 pagetables
+with 512 pagetable entries each, and one page for paging level 2, 3
+and 4 respectivelly.  The address of the initial pagetable pages is
+provided by Xen in the <code>start_info.pt_base</code> field, and the
+number of initial pages is provided in
+<code>start_into.nr_pt_frames</code>.  GUK has to take care to map the
+rest of the reserved memory correctly. It uses the memory after the
+initial pagetables (<code>start_pfn_va</code>), i.e., </code>pt_base +
+(nr_pt_frames + 3) * PAGE_SIZE</code>, for its
+pagetables. <code>arch_init_mm</code> is passed the addresses of two
+variables, <code>free_pfn</code> and
+<code>max_pfn</code>. <code>free_pfn</code> is initially set to the
+physical page frame number (pfn) corresponding to the virtual address
+<code>start_pfn_va</code> and <code>max_pfn</code> is set to the pfn beyond the end of the
+initial domain memory. The pagetable setup is done in arch/x86/mm.c by
+<code>build_pagetable</code>.  In the initial mapping process, page table frames
+are allocated sequentially starting at free_pfn.  On return from
+<code>build_pagetable</code> , <code>free_pfn</code> holds the pfn of the first page of dynamic
+memory available for use by the page allocator, described below.
+
+<H3>Building/Destroying Pagetables</H3>
+The <code>build_pagetable</code> function has been generalized from the Mini-OS version
+to support mapping arbitrary virtual address ranges with a flexible,
+function call based, mechanism for deciding how to allocate both the
+pseudo-physical memory and the memory needed for page table frames.
+Virtual memory is mapped sequentially, a page at a time. 
+Two function pointers are passed into <code>build_pagetable</code>. The first
+is called to get the machine page number to store in the L1 page
+table that maps a given virtual address. The second is called whenever
+a new page table frame needs to be allocated. Note that both functions
+are required to return machine frame numbers.
+<p>
+Whenever <code>build_pagetable</code> requires a new pagetable frame it invokes
+<code>new_pt_frame()</code> with the given machine page to use as the frame, which
+marks the page as a pagetable page, disables read/write access to it,
+pins it and updates its higher level pagetable entry to point to it
+(i.e., it invokes <code>mmu_update()</code> three times).
+<p>
+The inverse function <code>demolish_pagetable</code> can be called to unmap
+a virtual address range. Note that any page frames that become empty
+as a result are <b>not</b> deallocated (or removed from the parent
+pagetable). This is because it is quite likely that the address
+range will be remapped at some point and it is convenient to simply
+reuse the frames.
+
+<H2>Page Allocator</H2>
+
+GUK provides a dynamic page allocator that manages the available memory
+within its domain.  The allocator does not store information in the used pages, and
+hence the user of the allocator has to track the number of pages allocated
+and use it when freeing the pages again (i.e., the <code>free_pages</code> call expects
+the number of pages to deallocate). Whereas Mini-OS used a buddy algorithm,
+GUK uses a much simpler and more flexible algorithm that is tailored to the
+expected demands of a Java virtual machine. 
+<p>
+GUK retains the <code>malloc/free</code> implementation from Mini-OS that is built on the
+page allocator. However, it is expected that GUK-based systems will use the
+page allocator in preference to <code>malloc</code> in most situations, and treat the
+allocated pages as pseudo-physical memory to map to other virtual address
+regions.
+<p>
+Experimentally, the memory allocated by the microkernel services,
+which is a mixture of malloc'ed and page allocated memory, is almost
+all allocated on startup, not freed, and relatively small. A Java virtual
+machine allocates memory for thread stacks, runtime compiled code
+regions and heap, the latter two typically being in large
+units. Therefore, the page allocator distinguishes "small" allocations
+from "bulk" allocations and divides the available memory into two
+regions. After startup most of the page allocator activity is in the bulk region.
+The relative size of these regions is controllable by a
+run-time command line option, "GUKMS=N", where N is the percentage of
+maxmem to allocate to the small region. The default is 2%.
+
+
+<H3>Memory Ballooning</H3>
+
+Memory ballooning the term used to describe the increase and decrease
+of the physical memory allocated to a domain during its lifetime in
+response to memory pressures from other concurrently running
+domains. It is analagous to inflating and deflating a ballon. In GUK,
+ballooning is managed in the page allocator. When either a bulk memory
+request cannot be met, or an explicit call to increase domain memory is made, a request
+is made to Xen to increase the memory reservation. This will only be
+possible if there are areas in the pseudo-physical memory (i.e. up to
+<code>maxmem</code> ) that are currently not allocated machine memory. Initially
+this is only possible if <code>maxmem > memory</code>. If so, and there is
+available machine memory in the system to satisfy the request, then
+the domain memory is extended starting at <code>pfn == memory</code> Xen takes
+care of updating the mapping tables. If domain memory only increases
+then the physical memory is extended linearly until <code>maxmem</code> is reached.
+<p>
+However, a domain may also decrease its memory reservation, either
+voluntarily or in response to a request from Xen, which is
+communicated to the domain through the Xenstore data structure. I.e.,
+a domain had to explicitly watch for a change in the <code>memory/target</code> 
+node. GUK provides a function to watch for changes to this value, but
+does not create a thread to invoke the function; the expectation being
+that this will be provided by the encapsulating system.
+<p>
+To satisfy a decrease request, an unused area of pseudo-physical memory must
+be located and the corresponding machine frames returned to Xen.  That
+area of physical memory is then recorded as being unavailable for
+allocation and as a "hole" that can be filled by a subsequent request
+to increase memory. That is, once memory has been returned to Xen,
+subsequent increase requests search the list of holes for unbacked
+pseudo-physical memory. The initial situation described above is characterized
+by there being one hole from <code>memory -> maxmem</code>.
+
+
+<H2>Grant tables</H2>
+
+Grant tables are used to record information map foreign pages, i.e.,
+pages owned by other domains or Xen itself.  The major use of foreign
+pages is in device handling, particularly the network.
+<p>
+To avoid interaction with the 1-1 page allocated memory area, the grant tables are
+mapped at a virtual address just beyond the maximum physical memory of the machine.
+Xen actually provides the pages for the grant table and returns a list of machine
+page numbers in response to the <code>GNTTABOP_setup_table</code> call. These pages are then
+used when mapping the grant table area on GUK. To map this area also requires
+memory for new page table frames and these are allocated from the page allocated memory.
+</BODY>
+</HTML>

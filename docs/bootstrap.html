@@ -1,0 +1,91 @@
+<!--
+#
+# Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
+# Clara, California 95054, U.S.A. All rights reserved.
+# 
+# U.S. Government Rights - Commercial software. Government users are
+# subject to the Sun Microsystems, Inc. standard license agreement and
+# applicable provisions of the FAR and its supplements.
+# 
+# Use is subject to license terms.
+# 
+# This distribution may include materials developed by third parties.
+# 
+# Parts of the product may be derived from Berkeley BSD systems,
+# licensed from the University of California. UNIX is a registered
+# trademark in the U.S.  and in other countries, exclusively licensed
+# through X/Open Company, Ltd.
+# 
+# Sun, Sun Microsystems, the Sun logo and Java are trademarks or
+# registered trademarks of Sun Microsystems, Inc. in the U.S. and other
+# countries.
+# 
+# This product is covered and controlled by U.S. Export Control laws and
+# may be subject to the export or import laws in other
+# countries. Nuclear, missile, chemical biological weapons or nuclear
+# maritime end uses or end users, whether direct or indirect, are
+# strictly prohibited. Export or reexport to countries subject to
+# U.S. embargo or to entities identified on U.S. export exclusion lists,
+# including, but not limited to, the denied persons and specially
+# designated nationals lists is strictly prohibited.
+# 
+#
+-->
+<HTML>
+<HEAD>
+<TITLE>Project Guest VM: Microkernel: Bootstrap</TITLE>
+<BODY>
+<H1>Project Guest VM: Microkernel: Bootstrap</H1> 
+<H2>Introduction</H1>
+GUK is normally part of a larger subsystem but can be run stand-alone, e.g.:
+<pre>
+# xm create -c domain_config
+Using config file "./domain_config".
+Started domain GUK-root
+time: 70673721792504 periodic_thread
+...
+</pre>
+The microkernel gets the startup information from the Xen hypervisor
+and provides a set of callbacks to it.  Bootstrapping continues by
+setting up the event channels (interrupt handlers) and initializing
+pagetables, timers, console and the scheduler.  If SMP is enabled,
+i.e. vcpus > 1 in the domain config file, the remaining cpus are
+activated after the scheduler is initialized. If the <code>BRIDGE</code>
+environment variable is set to the name of the network bridge, the domain
+will be configured with a network interface.
+<p>
+To support null pointer checks, the page at virtual address 0 is then
+mapped out.
+<p>
+The microkernel services are then started, these are:
+<ul>
+<li>Network (netfront)
+<li>Block device (blk_front)
+<li>Sibling guest file system (fs-front)
+<li>Shutdown (suspend/resume)
+</ul>
+<p>
+If debugging is enabled, the db-backend thread is created, which will
+wait for a connection from the debugging front-end before continuing
+the microkernel.  Otherwise, the function <code>guk_app_main</code> is invoked. The
+microkernel provides a weak definition of this function which creates
+a thread that prints the time (in nanoseconds) to both the console and
+the Xen console every 500 ms.  The network is handled in a similar
+way, the function <code>guk_net_app_main</code> being called
+with the MAC address, or NULL if no network is configured. Incoming packets
+invoke the <code>guk_netif_rx</code> method. Both of these methods are given
+weak definitions in GUK, the default <code>guk_netif_rx</code> just prints a
+message to the console. The 
+<p>
+When the microkernel is used as part of
+a larger system, that system must provide a strong definition of
+<code>guk_app_main</code> that will override the weak definition.  Note that any
+definition of <code>guk_app_main</code> must create a thread to contain its
+activity and return, at which point the microkernel switches to the
+idle thread for VCPU 0. A similar override should be used for the network methods.
+<p>
+The startup can be traced by placing <code>-XX:GUKTrace:startup</code> in the
+<code>extra</code> command line argument.
+
+</BODY>
+</HTML>

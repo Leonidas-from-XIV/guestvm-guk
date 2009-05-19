@@ -1,0 +1,161 @@
+<!--
+#
+# Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
+# Clara, California 95054, U.S.A. All rights reserved.
+# 
+# U.S. Government Rights - Commercial software. Government users are
+# subject to the Sun Microsystems, Inc. standard license agreement and
+# applicable provisions of the FAR and its supplements.
+# 
+# Use is subject to license terms.
+# 
+# This distribution may include materials developed by third parties.
+# 
+# Parts of the product may be derived from Berkeley BSD systems,
+# licensed from the University of California. UNIX is a registered
+# trademark in the U.S.  and in other countries, exclusively licensed
+# through X/Open Company, Ltd.
+# 
+# Sun, Sun Microsystems, the Sun logo and Java are trademarks or
+# registered trademarks of Sun Microsystems, Inc. in the U.S. and other
+# countries.
+# 
+# This product is covered and controlled by U.S. Export Control laws and
+# may be subject to the export or import laws in other
+# countries. Nuclear, missile, chemical biological weapons or nuclear
+# maritime end uses or end users, whether direct or indirect, are
+# strictly prohibited. Export or reexport to countries subject to
+# U.S. embargo or to entities identified on U.S. export exclusion lists,
+# including, but not limited to, the denied persons and specially
+# designated nationals lists is strictly prohibited.
+# 
+#
+-->
+<HTML>
+<HEAD>
+<TITLE>Project Guest VM: Microkernel: Debugging</TITLE>
+<BODY>
+<H1>Project Guest VM: Microkernel: Debugging</H1>
+<H2>Introduction</H2>
+
+The Guest VM microkernel supports two debugging mechanisms, interactive debugging
+from a separate domain, and trace generation for situations where interactive debugging is
+either inappropriate or impractical.
+
+<H2>Debugging</H2>
+At the beginning of the project there was no support within the Xen world for
+one domain to debug another, as is normal in the Unix process world, e.g. gdb.
+There has been some progress in this direction lately, from Oracle, but
+the support is not yet part of the standard distribution.
+<p>
+The Maxine VM provides a powerful GUI-based debugger, the Inspector, that 
+supports Maxine development. The Inspector uses similar low-level facilities to gdb, e.g., ptrace
+on Unix systems. It was decided to port the Inspector by to Guest VM by providing explicit
+support in the microkernel for the features required by the Inspector, by implementing a
+a custom frontend/backend driver using the Xen ring communication mechanism.
+
+<H3>Implementation Details</H3>
+
+The GuestVM microkernel communicates with the debugger via a ring.  The debugger puts
+requests on the ring and a debug threads collects the requests and parses
+them.  GuestVM microkernel supports 16 types of requests, defined in tools/db-front/dbif.h:
+
+<pre>
+<code>
+REQ_READ_U64           /* read a word from a specified address */
+REQ_WRITE_U64          /* write a word to a specified address */
+REQ_GATHER_THREAD      /* get a the thread id and its flags */
+REQ_SUSPEND_THREAD     /* suspend a specified thread */
+REQ_RESUME_THREAD      /* resume a previous suspended thread */
+REQ_SINGLE_STEP_THREAD /* request to single step a thread */
+REQ_GET_REGS           /* get the register contents of a thread */
+REQ_SET_IP             /* set the instruction pointer of a thread */
+REQ_GET_THREAD_STACK   /* get the address of a thread */
+REQ_APP_SPECIFIC1      /* weak symbol, not used in GuestVM microkernel */
+REQ_READBYTES  /* read a number of bytes starting at a specified address */
+REQ_WRITEBYTES /* write bytes starting at a specified address */
+REQ_DB_DEBUG           /* set the debug level for the DEBUG statements */
+REQ_SIGNOFF            /* request to shutdown a debug connectionn */
+REQ_SUSPEND_THREADS    /* not used */
+</code>
+</pre>
+
+The read and write operations (i.e. READ_U64, WRITE_U64, READBYTES, and
+WRITEBYTES) could result in a page fault.  And the page fault handler has
+to be aware that the debugger initiated the memory access.  When the page
+fault handler notices a fault initiated by the debugger, it notifies the
+debug thread, which recovers from the error and responds with an error to
+the debugger.
+<p>
+The low-level debug implementation uses two trap.  The debug trap (int1) is
+used for single stepping, and the int3 trap is used for breakpoints.  If a
+thread is marked for single stepping it will suspend at specific points: on
+return from an interrupt in preempt_schedule_irq or when preempted in
+preempt_schedule.  The debugger can savely read the thread's registers only
+if it is suspended in these states, since the interrupt mechanism and the
+preemption mechanism save a threads register contents on its stack, and the
+thread itself is blocked.  However, single stepping does not work correctly
+for the very first step if initiated from preemption code path, since the
+threads rflag register is restored only on return from interrupt.
+Therefore, the thread activates single stepping after the schedule
+invokation returns, but before it resumes execution. Thus the first
+stepping interrupt is probably still in the scheduler code. However,
+beginning with the second step interrupts occur in the code of the debugged
+thread.
+
+<H2>Tracing</H2>
+
+The original Mini-OS code contained a mechanism for debugging via tracing based on DEBUG macros
+that were conditionally compiled.
+Some of this still remains, but much of it has been replaced by a permanent tracing mechanism
+that is per-subsystem and can be selectively enabled by runtime command line options.
+<p>
+Part of the rationale for the new tracing system was to support off-line analysis
+of the system, for example, the memory management system or the scheduler.
+Therefore the tracing is oriented to machine analysis rather then human readibility.
+<p>
+The following subsystems can be traced; the trace option is in brackets:
+<pre>
+</pre>
+scheduler             (sched)
+domain startup        (startup)
+blk device            (blk)
+debugging back-end    (dbback)
+sibling file system   (fsfront)
+grant tables          (gnttab)
+memory management     (mm)
+page table management (mmpt)
+network device        (net)
+services              (service)
+multiple cpus         (smp)
+xenbus                (xenbus)
+trap handling         (traps)
+
+</pre>
+Tracing is enabled by adding <code>-XX:GUKTrace:T</code> the "extra" command line 
+where <code>T</code> is a list of the above options separated by ":". E.g.,
+
+<pre>
+xm config -c domain-config extra=-XX:GUKTrace:startup:mmpt
+</pre>
+This would trace domain startup and page table handling sending the
+trace output to the Xen console. To send trace output to the domain
+console, set the trace option <code>toring</code>.  By default output
+is unbuffered, i.e, it will interleave with program output. By setting
+the option <code>buffer</code>, output will be buffered until the
+domain exits. Note that the buffer is fixed size, so buffered output
+may wrap; this is indicated in the output. Note also that buffered
+output is less intrusive to the domain than non-buffered as it holds no spinlocks
+and does not disable events while generating the data.
+E.g.
+<pre>
+xm config -c domain-config extra=-XX:GUKTrace:startup:mmpt:toring:buffer
+</pre>
+<H3>Reserved CPU Tracing</H3>
+As an experimental feature, it is possible to dedicate a CPU to tracing some event of interest,
+e.g., printing the run queue periodically, without interfering with the activities of the other
+CPUs. The tracing CPU runs a special idle thread that executes the <code>guk_trace_cpu_fn</code>
+every second. GUK provides a weak definition of <code>guk_trace_cpu_fn</code> that does nothing. An encapsulating system can enable tracing by providing a strong definition and linking it with GUK. 
+The CPU reservation is enabled with the <code>-XX:GUKCT=N</code> option, to reserve CPU <code>N</code>, where <code>N > 0</code>.
+</BODY>
+</HTML>

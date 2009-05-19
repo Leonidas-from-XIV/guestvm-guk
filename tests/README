@@ -1,0 +1,4 @@
+An assortment of tests for memory, threading, spinlocks etc.
+
+The memory tests are somewhat inappropriate now since they test malloc,
+which the Guest VM microkernel is not optimized for.

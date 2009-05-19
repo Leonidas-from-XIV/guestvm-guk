@@ -1,0 +1,68 @@
+<!--
+#
+# Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
+# Clara, California 95054, U.S.A. All rights reserved.
+# 
+# U.S. Government Rights - Commercial software. Government users are
+# subject to the Sun Microsystems, Inc. standard license agreement and
+# applicable provisions of the FAR and its supplements.
+# 
+# Use is subject to license terms.
+# 
+# This distribution may include materials developed by third parties.
+# 
+# Parts of the product may be derived from Berkeley BSD systems,
+# licensed from the University of California. UNIX is a registered
+# trademark in the U.S.  and in other countries, exclusively licensed
+# through X/Open Company, Ltd.
+# 
+# Sun, Sun Microsystems, the Sun logo and Java are trademarks or
+# registered trademarks of Sun Microsystems, Inc. in the U.S. and other
+# countries.
+# 
+# This product is covered and controlled by U.S. Export Control laws and
+# may be subject to the export or import laws in other
+# countries. Nuclear, missile, chemical biological weapons or nuclear
+# maritime end uses or end users, whether direct or indirect, are
+# strictly prohibited. Export or reexport to countries subject to
+# U.S. embargo or to entities identified on U.S. export exclusion lists,
+# including, but not limited to, the denied persons and specially
+# designated nationals lists is strictly prohibited.
+# 
+#
+-->
+<HTML>
+<HEAD>
+<TITLE>Project Guest VM: Microkernel</TITLE>
+<BODY>
+<H1>Project Guest VM: Microkernel</H1>
+<H2>Introduction</H2>
+This documentation describes the Guest VM Microkernel, GUK for short,
+which is an evolution of the Xen Minimal OS, Mini-OS. GUK is designed to
+support the Guest VM Java virtual machine and platform and, therefore, 
+although more functional than Mini-OS, it is also somewhat more specialized.
+However, GUK should be usable in a wide variety of environments,
+particularly in the support of language run time virtual machines.
+<p>
+The main differences between Mini-OS, when originally forked, and GUK are:
+<ul>
+<li>Support for multiple VCPUS (SMP)
+<li>Pre-emptive thread scheduling
+<li>Memory management tailored to a language run time virtual machine
+<li>Memory ballooning
+<li>Block device support
+<li>Suspend/Resume support
+</ul>
+Note that Mini-OS has also evolved since the fork and it would be good to 
+merge bug fixes and new features as appropriate.
+<H2>Components</H2>
+Documentation is incomplete and limited to the following components:
+<ul>
+<li><a href="building.html">Building</a>
+<li><a href="bootstrap.html">Running (Bootstrap)</a>
+<li><a href="memory.html">Memory management</a>
+<li><a href="scheduler.html">Thread scheduling</a>
+<li><a href="debugging.html">Debugging</a>
+</ul>
+</BODY>
+</HTML>
