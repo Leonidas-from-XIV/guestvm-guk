@@ -231,3 +231,22 @@ int guk_set_trace_state(int trace_var_ord, int value) {
   return previous;
 }
 
+int guk_get_trace_state(int trace_var_ord) {
+  switch (trace_var_ord) {
+  case 0: return trace_state_sched;
+  case 1: return trace_state_startup;
+  case 2: return trace_state_blk;
+  case 3: return trace_state_db_back;
+  case 4: return trace_state_fs_front;
+  case 5: return trace_state_gnttab;
+  case 6: return trace_state_mm;
+  case 7: return trace_state_mmpt;
+  case 8: return trace_state_net;
+  case 9: return trace_state_service;
+  case 10: return trace_state_smp;
+  case 11: return trace_state_xenbus;
+  case 12: return trace_state_traps;
+  default: return 0;
+  }
+}
+

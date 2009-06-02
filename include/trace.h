@@ -35,7 +35,7 @@
 /* Values that control tracing in the microkernel
  * the command line strings must match those in GuestVMVMProgramArguments.java
  * All strings are of the form -XX:GVMTrace[:subsystem], where [:subsystem] is optional
- * If no susbsystem is specified, tracing is enabled, and presumed to be switched on
+ * If no subsystem is specified, tracing is enabled, and presumed to be switched on
  * per subsystem during execution.
  *
  * Author: Mick Jordan, Sun Microsystems, Inc..
@@ -74,10 +74,11 @@ TRACE_VAR(traps)
 #define trace_xenbus() trace_state_xenbus
 #define trace_traps() trace_state_traps
 
-/* Support for runtime enabling/disabling.
-   trce_var_ord is based on order of above TRACE_VAR decls, starting at zero.
+/* Support for runtime enabling/disabling and inquiry from non-C code.
+   trace_var_ord is based on order of above TRACE_VAR decls, starting at zero.
  */
 extern int guk_set_trace_state(int trace_var_ord, int value);
+extern int guk_get_trace_state(int trace_var_ord);
 
 void init_trace(char *cmd_line);
 
