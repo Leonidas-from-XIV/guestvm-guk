@@ -50,8 +50,8 @@
 #ifndef _EVENTS_H_
 #define _EVENTS_H_
 
-#include<traps.h>
-#include<xen/event_channel.h>
+#include <traps.h>
+#include <xen/event_channel.h>
 
 void init_events(void);
 void evtchn_suspend(void);

@@ -46,6 +46,8 @@
 
 #ifndef _TYPES_H_
 #define _TYPES_H_
+#define _LIBC_LIMITS_H_
+#include <limits.h>
 
 typedef signed char         s8;
 typedef unsigned char       u8;
@@ -92,10 +94,6 @@ typedef u32 uint32_t;
 typedef s32 int32_t;
 typedef u64 uint64_t;
 typedef s64 int64_t;
-
-
-#define INT_MAX         ((int)(~0U>>1))
-#define UINT_MAX            (~0U)
 
 
 typedef signed long     ssize_t;

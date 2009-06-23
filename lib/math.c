@@ -116,7 +116,6 @@ union uu {
  * These are used for shifting, and also below for halfword extraction
  * and assembly.
  */
-#define CHAR_BIT        8               /* number of bits in a char */
 #define QUAD_BITS       (sizeof(s64) * CHAR_BIT)
 #define LONG_BITS       (sizeof(long) * CHAR_BIT)
 #define HALF_BITS       (sizeof(long) * CHAR_BIT / 2)
