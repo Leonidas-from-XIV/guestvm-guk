@@ -111,7 +111,7 @@ static void dispatch_read_u64(struct dbif_request *req)
     u64 *pointer;
 
     pointer = (u64 *)req->u.read_u64.address;
-    DEBUG(2, "Read request for %p recieved.\n", pointer);
+    DEBUG(2, "Read request for %p recieved.", pointer);
     rsp = get_response();
     rsp->id = req->id;
     rsp->ret_val = *pointer;
@@ -124,7 +124,7 @@ static void dispatch_write_u64(struct dbif_request *req)
 
     pointer = (u64 *)req->u.writebytes.address;
     value = req->u.write_u64.value;
-    DEBUG(2, "Write request for %p recieved, value=%lx, current_value=%lx.\n",
+    DEBUG(2, "Write request for %p recieved, value=%lx, current_value=%lx.",
             pointer, value, *pointer);
     *pointer = value;
     rsp = get_response();
@@ -154,7 +154,7 @@ static void dispatch_readbytes(struct dbif_request *req)
     pointer = (char *)req->u.readbytes.address;
     n = req->u.readbytes.n;
     set_db_back_handler(db_back_handler);
-    DEBUG(2, "Readbytes request for %p, %d received.\n", pointer, n);
+    DEBUG(2, "Readbytes request for %p, %d received.", pointer, n);
     rsp = get_response();
     rsp->id = req->id;
     rsp->ret_val = n;
@@ -182,7 +182,7 @@ static void dispatch_writebytes(struct dbif_request *req)
 
     pointer = (char *)req->u.writebytes.address;
     n = req->u.writebytes.n;
-    DEBUG(2, "Writebytes request for %p, %d received\n",
+    DEBUG(2, "Writebytes request for %p, %d received",
             pointer, n);
     rsp = get_response();
     rsp->id = req->id;
@@ -209,7 +209,7 @@ static void dispatch_gather_threads(struct dbif_request *req)
     int numThreads = 0;
     struct db_thread *db_thread = (struct db_thread *)data_page;
 
-    DEBUG(1, "Gather threads request.\n");
+    DEBUG(1, "Gather threads request.");
     /* -1 == max value for uint16_t */
     spin_lock(&thread_list_lock);
     list_for_each(list_head, &thread_list) {
@@ -261,16 +261,16 @@ static void dispatch_suspend_thread(struct dbif_request *req)
     struct thread *thread;
 
     thread_id = req->u.suspend.thread_id;
-    DEBUG(1, "Suspend request for thread_id=%d.\n",
+    DEBUG(1, "Suspend request for thread_id=%d.",
             thread_id);
     thread = get_thread_by_id(thread_id);
     rsp = get_response();
     rsp->id = req->id;
     if(thread == NULL) {
-        DEBUG(1, "Thread of id=%d not found.\n", thread_id);
+        DEBUG(1, "Thread of id=%d not found.", thread_id);
         rsp->ret_val = (uint64_t)-1;
     } else {
-	DEBUG(1, "Thread id=%d found.\n", thread_id);
+	DEBUG(1, "Thread id=%d found.", thread_id);
 	if (!is_runnable(thread)) {
 	    /* Thread is blocked but may become runnable again while the
 	       debugger is in control, e.g. due to a sleep expiring.
@@ -301,7 +301,7 @@ static void dispatch_suspend_thread(struct dbif_request *req)
 	}
 	rsp->ret_val = 0;
     }
-    DEBUG(1, "Returning from suspend.\n");
+    DEBUG(1, "Returning from suspend.");
 }
 
 static int debugging_count = 0;
@@ -313,17 +313,17 @@ static void dispatch_single_step_thread(struct dbif_request *req)
     struct thread *thread;
 
     thread_id = req->u.step.thread_id;
-    DEBUG(1, "Step request for thread_id=%d.\n",
+    DEBUG(1, "Step request for thread_id=%d.",
             thread_id);
     thread = get_thread_by_id(thread_id);
     rsp = get_response();
     rsp->id = req->id;
     if(thread == NULL) {
-        DEBUG(1, "Thread of id=%d not found.\n", thread_id);
+        DEBUG(1, "Thread of id=%d not found.", thread_id);
         rsp->ret_val = (uint64_t)-1;
     }
     else if(!is_debug_suspend(thread) || is_runnable(thread) || is_running(thread)) {
-	DEBUG(1, "Thread of id=%d not suspended.\n", thread_id);
+	DEBUG(1, "Thread of id=%d not suspended.", thread_id);
 	rsp->ret_val = (uint64_t)-2;
     } else {
         struct pt_regs *regs;
@@ -331,14 +331,14 @@ static void dispatch_single_step_thread(struct dbif_request *req)
         if(debugging_count == 0)
             debugging_count = 15;
 
-        DEBUG(1, "Thread %s found.\n", thread->name);
+        DEBUG(1, "Thread %s found.", thread->name);
         set_stepped(thread);
         if(thread->preempt_count != 1)
-            printk("Preempt count = %lx\n", thread->preempt_count);
+            printk("Preempt count = %lx", thread->preempt_count);
         BUG_ON(thread->preempt_count != 1);
         regs = (struct pt_regs*)thread->regs;
         if(regs != NULL) {
-            DEBUG(1, " >> Thread %s found (regs=%lx, regs=%lx).\n",
+            DEBUG(1, " >> Thread %s found (regs=%lx, regs=%lx).",
                     thread->name, thread->regs, thread->regs->rip);
             BUG_ON(thread->regs->eflags > 0xFFF);
             thread->regs->eflags |= 0x00000100; /* Trap Flag */
@@ -365,28 +365,28 @@ static void dispatch_resume_thread(struct dbif_request *req)
     struct thread *thread;
 
     thread_id = req->u.resume.thread_id;
-    DEBUG(1, "Resume request for thread_id=%d.\n",
+    DEBUG(1, "Resume request for thread_id=%d.",
             thread_id);
     clear_all_req_debug_suspend();
     thread = get_thread_by_id(thread_id);
     rsp = get_response();
     rsp->id = req->id;
     if(thread == NULL) {
-        DEBUG(1, "Thread of id=%d not found.\n", thread_id);
+        DEBUG(1, "Thread of id=%d not found.", thread_id);
         rsp->ret_val = (uint64_t)-1;
     }
 
     if(!is_debug_suspend(thread) || is_runnable(thread) || is_running(thread)) {
         DEBUG(1, "Thread of id=%d not suspended (is_debug_suspended=%lx,"
 			                        "is_runnable=%lx,"
-                                                "is_running=%lx).\n",
+                                                "is_running=%lx).",
 			thread_id,
 			is_debug_suspend(thread),
 			is_runnable(thread),
 			is_running(thread));
         rsp->ret_val = (uint64_t)-2;
     } else {
-        DEBUG(1, "Thread %s found (runnable=%d, stepped=%d).\n",
+        DEBUG(1, "Thread %s found (runnable=%d, stepped=%d).",
                 thread->name, is_runnable(thread), is_stepped(thread));
         clear_debug_suspend(thread);
         db_wake(thread);
@@ -402,25 +402,25 @@ static void dispatch_get_regs(struct dbif_request *req)
     struct db_regs *regs;
 
     thread_id = req->u.get_regs.thread_id;
-    DEBUG(1, "Get regs request for thread_id=%d.\n",
+    DEBUG(1, "Get regs request for thread_id=%d.",
             thread_id);
     thread = get_thread_by_id(thread_id);
     rsp = get_response();
     rsp->id = req->id;
     if(thread == NULL)
     {
-        DEBUG(1, "Thread of id=%d not found.\n", thread_id);
+        DEBUG(1, "Thread of id=%d not found.", thread_id);
         rsp->ret_val = (uint64_t)-1;
     }
     else
     if(is_runnable(thread) || is_running(thread))
     {
-        DEBUG(1, "Thread of id=%d is not blocked.\n", thread_id);
+        DEBUG(1, "Thread of id=%d is not blocked.", thread_id);
         rsp->ret_val = (uint64_t)-2;
     }
     else
     {
-        DEBUG(1, "Thread %s found.\n", thread->name);
+        DEBUG(1, "Thread id=%d found, regs=%lx.", thread_id, thread->regs);
         rsp->ret_val = 0;
         regs = &rsp->u.regs;
         if(thread->regs == NULL)
@@ -431,6 +431,23 @@ static void dispatch_get_regs(struct dbif_request *req)
         }
         else
         {
+	    regs->xmm0 = thread->fpregs->xmm0;
+	    regs->xmm1 = thread->fpregs->xmm1;
+	    regs->xmm2 = thread->fpregs->xmm2;
+  	    regs->xmm3 = thread->fpregs->xmm3;
+            regs->xmm4 = thread->fpregs->xmm4;
+	    regs->xmm5 = thread->fpregs->xmm5;
+	    regs->xmm6 = thread->fpregs->xmm6;
+	    regs->xmm7 = thread->fpregs->xmm7;
+	    regs->xmm8 = thread->fpregs->xmm8;
+	    regs->xmm9 = thread->fpregs->xmm9;
+	    regs->xmm10 = thread->fpregs->xmm10;
+	    regs->xmm11 = thread->fpregs->xmm11;
+	    regs->xmm12 = thread->fpregs->xmm12;
+	    regs->xmm13 = thread->fpregs->xmm13;
+	    regs->xmm14 = thread->fpregs->xmm14;
+	    regs->xmm15 = thread->fpregs->xmm15;
+
             regs->r15 = thread->regs->r15;
             regs->r14 = thread->regs->r14;
             regs->r13 = thread->regs->r13;
@@ -447,6 +464,7 @@ static void dispatch_get_regs(struct dbif_request *req)
             regs->rsi = thread->regs->rsi;
             regs->rdi = thread->regs->rdi;
             regs->rip = thread->regs->rip;
+            regs->flags = thread->regs->eflags;
             regs->rsp = thread->regs->rsp;
         }
     }
@@ -459,31 +477,31 @@ static void dispatch_set_ip(struct dbif_request *req)
     struct thread *thread;
 
     thread_id = req->u.set_ip.thread_id;
-    DEBUG(1, "Set ip request for thread_id=%d.\n",
+    DEBUG(1, "Set ip request for thread_id=%d.",
             thread_id);
     thread = get_thread_by_id(thread_id);
     rsp = get_response();
     rsp->id = req->id;
     if(thread == NULL)
     {
-        DEBUG(1, "Thread of id=%d not found.\n", thread_id);
+        DEBUG(1, "Thread of id=%d not found.", thread_id);
         rsp->ret_val = (uint64_t)-1;
     }
     else
     if(is_runnable(thread) || is_running(thread))
     {
-        DEBUG(1, "Thread of id=%d is not blocked.\n", thread_id);
+        DEBUG(1, "Thread of id=%d is not blocked.", thread_id);
         rsp->ret_val = (uint64_t)-2;
     }
     else
     if(thread->regs == NULL)
     {
-        DEBUG(1, "Regs not available for thread of id=%d .\n", thread_id);
+        DEBUG(1, "Regs not available for thread of id=%d .", thread_id);
         rsp->ret_val = (uint64_t)-3;
     }
     else
     {
-        DEBUG(1, "Thread %s found.\n", thread->name);
+        DEBUG(1, "Thread %s found.", thread->name);
         rsp->ret_val = 0;
         //printk("Updated RIP from %lx, to %lx\n", thread->regs->rip, req->u.set_ip.ip);
         thread->regs->rip = req->u.set_ip.ip;
@@ -500,7 +518,7 @@ static void dispatch_get_thread_stack(struct dbif_request *req)
     rsp->id = req->id;
     if(thread != NULL)
     {
-	DEBUG(1, "Get stack request, thread %s.\n", thread->name);
+	DEBUG(1, "Get stack request, thread %s.", thread->name);
         rsp->ret_val = (uint64_t)thread->stack;
         rsp->ret_val2 = thread->stack_size;
     } else
@@ -521,7 +539,7 @@ static void dispatch_app_specific1(struct dbif_request *req)
 {
     struct dbif_response *rsp;
 
-    DEBUG(1, "App specific1 request received.\n");
+    DEBUG(1, "App specific1 request received.");
     rsp = get_response();
     guk_dispatch_app_specific1_request(req, rsp);
     rsp->id = req->id;
@@ -547,7 +565,7 @@ static void ring_thread(void *unused)
     int more, notify;
     struct thread *this_thread;
 
-    DEBUG(3, "Ring thread.\n");
+    DEBUG(3, "Ring thread.");
     this_thread = current;
     db_in_use = 1;
 
@@ -563,9 +581,9 @@ moretodo:
 
         while ((cons = ring.req_cons) != rp)
         {
-            DEBUG(3, "Got a request at %d\n", cons);
+            DEBUG(3, "Got a request at %d", cons);
             req = RING_GET_REQUEST(&ring, cons);
-            DEBUG(3, "Request type=%d\n", req->type);
+            DEBUG(3, "Request type=%d", req->type);
             switch(req->type)
             {
                 case REQ_READ_U64:
@@ -620,13 +638,13 @@ moretodo:
             nr_consumed++;
         }
 
-        DEBUG(3, "Backend consumed: %d requests\n", nr_consumed);
+        DEBUG(3, "Backend consumed: %d requests", nr_consumed);
         RING_PUSH_RESPONSES_AND_CHECK_NOTIFY(&ring, notify);
-        DEBUG(3, "Rsp producer=%d\n", ring.sring->rsp_prod);
-        DEBUG(3, "Pushed responces and notify=%d\n", notify);
+        DEBUG(3, "Rsp producer=%d", ring.sring->rsp_prod);
+        DEBUG(3, "Pushed responces and notify=%d", notify);
         if(notify)
             notify_remote_via_evtchn(port);
-        DEBUG(3, "Done notifying.\n");
+        DEBUG(3, "Done notifying.");
 
         preempt_disable();
         block(this_thread);
@@ -647,7 +665,7 @@ static void db_evt_handler(evtchn_port_t port, void *data)
 {
     struct thread *thread = (struct thread *)data;
 
-    DEBUG(3, "DB evtchn handler.\n");
+    DEBUG(3, "DB evtchn handler.");
     db_wake(thread);
     /* TODO - it would be good to resched here */
 }

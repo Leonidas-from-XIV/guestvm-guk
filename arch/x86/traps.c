@@ -262,9 +262,9 @@ void do_spurious_interrupt_bug(struct pt_regs * regs)
 
 void do_int3(struct pt_regs *regs)
 {
-    struct thread *thread;
-
-    thread = current;
+    struct thread *thread = current;
+    struct fp_regs *fpregs = thread->fpregs;
+    asm (save_fp_regs_asm : : [fpr] "r" (fpregs));
     if (trace_traps()) {
       tprintk("INT3 trap executed for thread %s, %d, %x.\n", thread->name, thread->id, thread->flags);
     }
@@ -275,9 +275,9 @@ void do_int3(struct pt_regs *regs)
 
 void do_debug(struct pt_regs *regs)
 {
-    struct thread *thread;
-
-    thread = current;
+    struct thread *thread = current;
+    struct fp_regs *fpregs = thread->fpregs;
+    asm (save_fp_regs_asm : : [fpr] "r" (fpregs));
     /* Bug if regs aren't saved properly */
     BUG_ON(thread->regs != regs);
     BUG_ON(thread->regs->eflags > 0xFFF);
@@ -295,7 +295,7 @@ void do_debug(struct pt_regs *regs)
 }
 
 /*
- * Submit a virtual IDT to teh hypervisor. This consists of tuples
+ * Submit a virtual IDT to the hypervisor. This consists of tuples
  * (interrupt vector, privilege ring, CS:EIP of handler).
  * The 'privilege ring' field specifies the least-privileged ring that
  * can trap to that vector using a software-interrupt instruction (INT).

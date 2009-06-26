@@ -151,7 +151,24 @@ struct db_thread {
     unsigned long stack;
     unsigned long stack_size;
 };
+
 struct db_regs {
+        unsigned long xmm0;
+        unsigned long xmm1;
+        unsigned long xmm2;
+        unsigned long xmm3;
+        unsigned long xmm4;
+        unsigned long xmm5;
+        unsigned long xmm6;
+        unsigned long xmm7;
+        unsigned long xmm8;
+        unsigned long xmm9;
+        unsigned long xmm10;
+        unsigned long xmm11;
+        unsigned long xmm12;
+        unsigned long xmm13;
+        unsigned long xmm14;
+        unsigned long xmm15;
 	unsigned long r15;
 	unsigned long r14;
 	unsigned long r13;
@@ -168,6 +185,7 @@ struct db_regs {
 	unsigned long rsi;
 	unsigned long rdi;
 	unsigned long rip;
+        unsigned long flags;
 	unsigned long rsp; 
 };
 

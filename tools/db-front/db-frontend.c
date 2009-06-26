@@ -45,7 +45,7 @@
 #include "db-frontend.h"
 
 /* uncomment next line to build a version that traces all activity to a file in /tmp */
-//#define DUMP_TRACE
+#define DUMP_TRACE
 
 #ifdef DUMP_TRACE
 static FILE *trace_file = NULL; 
@@ -367,6 +367,23 @@ struct db_regs* get_regs(uint16_t thread_id)
     regs = (struct db_regs*)malloc(sizeof(struct db_regs));
     db_regs = &rsp->u.regs;
 
+    regs->xmm0 = db_regs->xmm0;
+    regs->xmm1 = db_regs->xmm1;
+    regs->xmm2 = db_regs->xmm2;
+    regs->xmm3 = db_regs->xmm3;
+    regs->xmm4 = db_regs->xmm4;
+    regs->xmm5 = db_regs->xmm5;
+    regs->xmm6 = db_regs->xmm6;
+    regs->xmm7 = db_regs->xmm7;
+    regs->xmm8 = db_regs->xmm8;
+    regs->xmm9 = db_regs->xmm9;
+    regs->xmm10 = db_regs->xmm10;
+    regs->xmm11 = db_regs->xmm11;
+    regs->xmm12 = db_regs->xmm12;
+    regs->xmm13 = db_regs->xmm13;
+    regs->xmm14 = db_regs->xmm14;
+    regs->xmm15 = db_regs->xmm15;
+
     regs->r15 = db_regs->r15;
     regs->r14 = db_regs->r14;
     regs->r13 = db_regs->r13;
@@ -383,6 +400,7 @@ struct db_regs* get_regs(uint16_t thread_id)
     regs->rsi = db_regs->rsi;
     regs->rdi = db_regs->rdi;
     regs->rip = db_regs->rip;
+    regs->flags = db_regs->flags;
     regs->rsp = db_regs->rsp; 
 
     TRACE("Regs: r15=%lx, "
@@ -401,6 +419,7 @@ struct db_regs* get_regs(uint16_t thread_id)
                 "rsi=%lx, "
                 "rdi=%lx, "
                 "rip=%lx, "
+                "flags=%lx, "
                 "rsp=%lx.",
                  db_regs->r15, 
                  db_regs->r14,
@@ -418,6 +437,7 @@ struct db_regs* get_regs(uint16_t thread_id)
                  db_regs->rsi,
                  db_regs->rdi,
                  db_regs->rip,
+                 db_regs->flags,
                  db_regs->rsp);
 
     return regs;

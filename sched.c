@@ -542,7 +542,7 @@ static inline struct thread *pick_thread(struct thread *prev, int cpu)
     }
     if (next != NULL) {
 	if (is_running(next) && next->cpu != cpu) {
-	    ttprintk("ESR %d %s\n", next->id);
+	    xprintk("ESR %d %s\n", next->id);
 	    BUG();
 	}
 	set_running(next);
@@ -568,7 +568,7 @@ static inline struct thread *pick_thread(struct thread *prev, int cpu)
 	next = this_cpu(idle_thread);
     else {
 	if (is_running(next) && next->cpu != cpu) {
-	    ttprintk("ESR %d \n", next->id);
+	    xprintk("ESR %d \n", next->id);
 	    BUG();
 	}
     }
@@ -609,7 +609,7 @@ void guk_schedule(void)
 	/* find next thread to run; will look for java threads too */
 	next = pick_thread(prev, cpu);
 	if (!is_runnable(next) && next != per_cpu(cpu, idle_thread)) {
-            ttprintk("ESNR %d %x %d %x\n", next->id, next->flags, prev->id, prev->flags);
+            xprintk("ESNR %d %x %d %x\n", next->id, next->flags, prev->id, prev->flags);
 	    BUG();
 	}
     }
@@ -635,6 +635,14 @@ void guk_schedule(void)
         BUG_ON(irqs_disabled());
         local_irq_disable();
         this_cpu(current_thread) = next;
+	if (!is_ukernel(prev)) {
+	  struct fp_regs *fpregs = prev->fpregs;
+	  asm (save_fp_regs_asm : : [fpr] "r" (fpregs));	  
+	}
+	if (!is_ukernel(next)) {
+	  struct fp_regs *fpregs = next->fpregs;
+	  asm (restore_fp_regs_asm : : [fpr] "r" (fpregs));	  
+	}
         switch_threads(prev, next, prev);
 
         /* We running on the new thread's stack now.
@@ -737,7 +745,7 @@ need_resched:
     /* we could miss a preemption opportunity between schedule and now */
     barrier();
     if (unlikely(need_resched(ti))) {
-        ttprintk("PSI2 %d\n", ti->id);
+        if (trace_sched()) ttprintk("PSI2 %d\n", ti->id);
 	goto need_resched;
     }
 }
@@ -757,6 +765,7 @@ static struct thread* create_thread_with_id_stack(char *name,
     /* Not runnable, not exited, not sleeping, maybe ukernel thread */
     thread->flags = flags;
     thread->regs = NULL;
+    thread->fpregs = xmalloc(struct fp_regs);
     /* stack != NULL means Java Thread */
     if (stack == NULL || !upcalls_active) {
       thread->cpu = -1;
@@ -826,7 +835,7 @@ struct thread* create_idle_thread(unsigned int cpu)
                                 0,
                                 (void *)(unsigned long)cpu);
     /* Not runnable, not exited, not sleeping */
-    thread->flags = 0;
+    thread->flags = UKERNEL_FLAG;
     thread->regs = NULL;
     thread->cpu = cpu;
     thread->preempt_count = 1;
@@ -905,7 +914,7 @@ void block(struct thread *thread)
 	    spin_unlock_irqrestore(&ready_lock, flags);
 	}
     } else {
-	ttprintk("WARNING: try to block a non runnable thread %d %s\n", thread->id, thread->name);
+	xprintk("WARNING: try to block a non runnable thread %d %s\n", thread->id, thread->name);
 	print_backtrace();
     }
 }
@@ -1242,7 +1251,7 @@ void init_sched(char *cmd_line)
     /* Check for Time Slice setting */
     opt_value = num_option(cmd_line, TIMESLICE_OPTION);
     if (opt_value > 0) {
-      ttprintk("ST %d\n", timeslice);
+      if (trace_sched()) ttprintk("ST %d\n", timeslice);
       timeslice = MILLISECS(opt_value);
     }
 
