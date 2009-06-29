@@ -422,6 +422,7 @@ int guk_join_thread(struct thread *joinee)
     /* syncronize agains exit_thread and reap_dead */
     spin_lock(&zombie_lock);
     if (!is_dying(this_thread)) {
+        this_thread->regs = NULL;
 	block(this_thread);
 	set_joining(this_thread);
 	list_add_tail(&this_thread->ready_list, &joinee->joiners);
