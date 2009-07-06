@@ -51,7 +51,6 @@
 #ifndef _TIME_H_
 #define _TIME_H_
 
-#include <events.h>
 
 
 struct shadow_time_info {
@@ -63,7 +62,6 @@ struct shadow_time_info {
 	u32 version;
 };
 
-void timer_handler(evtchn_port_t ev, void *ign);
 /*
  * System Time
  * 64 bit value containing the nanoseconds elapsed since boot time.

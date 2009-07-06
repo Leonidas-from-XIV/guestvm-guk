@@ -162,6 +162,7 @@ static fault_handler_t fault_handler_table[] = {
     NULL
 };
 
+/* FIXME: hroeck what for? to detect recursive traps? */
 static int trapped = 0;
 
 #define CHECK_ERROR_INFO(trapnr, str, fname) \

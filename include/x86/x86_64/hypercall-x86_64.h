@@ -362,6 +362,9 @@ HYPERVISOR_domctl(
 	return _hypercall1(int, domctl, op);
 }
 
+#undef STR
+#undef __STR
+
 #endif /* __HYPERCALL_X86_64_H__ */
 
 /*

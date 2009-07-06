@@ -57,7 +57,7 @@ static int alloc_total = 0;
 static void verify_object(struct object *object)
 {
     u32 id = ((unsigned long)object - (unsigned long)objects) / sizeof(struct object);
-    u8 *test_value = (u8 *)object->pointer, *pointer;
+    uint8_t *test_value = (uint8_t *)object->pointer, *pointer;
     int i;
 
     if(!object->allocated)
@@ -73,7 +73,7 @@ fail:
            " got=%x, expected=%x\n",
             id, object->size, i, test_value[i], id & 0xFF);
  
-    pointer = (u8 *)objects[id].pointer;
+    pointer = (uint8_t *)objects[id].pointer;
 
     printk("Object %d, size: %d, pointer=%lx\n",
                id, objects[id].size, objects[id].pointer);

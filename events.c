@@ -254,6 +254,7 @@ int evtchn_bind_interdomain(domid_t pal, evtchn_port_t remote_port,
     return err;
 }
 
+extern void timer_handler(evtchn_port_t ev, void *ign);
 void evtchn_resume(void)
 {
     bind_virq(VIRQ_TIMER, smp_processor_id(), timer_handler, NULL);

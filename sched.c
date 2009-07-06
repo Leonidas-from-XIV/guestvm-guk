@@ -1171,6 +1171,7 @@ void trace_cpu_idle(int cpu) {
   } 
 }
 
+extern void timer_handler(evtchn_port_t ev, void *ign);
 /*
  * the idle thread executes this function
  */

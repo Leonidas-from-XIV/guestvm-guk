@@ -49,53 +49,37 @@
 #define _LIBC_LIMITS_H_
 #include <limits.h>
 
-typedef signed char         s8;
-typedef unsigned char       u8;
-typedef signed short        s16;
-typedef unsigned short      u16;
-typedef signed int          s32;
-typedef unsigned int        u32;
-#ifdef __i386__
-typedef signed long long    s64;
-typedef unsigned long long  u64;
-#elif defined(__x86_64__) || defined(__ia64__)
-typedef signed long         s64;
-typedef unsigned long       u64;
-#endif
-
 /* FreeBSD compat types */
 typedef unsigned char       u_char;
 typedef unsigned int        u_int;
 typedef unsigned long       u_long;
-#ifdef __i386__
-typedef long long           quad_t;
-typedef unsigned long long  u_quad_t;
-typedef unsigned int        uintptr_t;
-
-#if !defined(CONFIG_X86_PAE)
-typedef struct { unsigned long pte_low; } pte_t;
-#else
-typedef struct { unsigned long pte_low, pte_high; } pte_t;
-#endif /* CONFIG_X86_PAE */
-
-#elif defined(__x86_64__) || defined(__ia64__)
 typedef long                quad_t;
 typedef unsigned long       u_quad_t;
 typedef unsigned long       uintptr_t;
+typedef long int            intptr_t;
 
 typedef struct { unsigned long pte; } pte_t;
-#endif /* __i386__ || __x86_64__ */
 
-typedef  u8 uint8_t;
-typedef  s8 int8_t;
-typedef u16 uint16_t;
-typedef s16 int16_t;
-typedef u32 uint32_t;
-typedef s32 int32_t;
-typedef u64 uint64_t;
-typedef s64 int64_t;
+#define __int8_t_defined
+typedef  unsigned char uint8_t;
+typedef  char int8_t;
+typedef  unsigned short uint16_t;
+typedef  short int16_t;
+typedef  unsigned int uint32_t;
+typedef  int int32_t;
+typedef  unsigned long uint64_t;
+typedef  long int64_t;
+
+// do not define u8 since it is used in hotspot for julong types
+typedef  uint16_t u16;
+typedef  int16_t  s16;
+typedef  uint32_t u32;
+typedef  int32_t  s32;
+typedef  uint64_t u64;
+typedef  int64_t  s64;
 
 
 typedef signed long     ssize_t;
+#define _SYS_INT_TYPES_H
 
 #endif /* _TYPES_H_ */

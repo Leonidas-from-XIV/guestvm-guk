@@ -47,6 +47,7 @@
 #include <xmalloc.h>
 #include <trace.h>
 #include <p2m.h>
+#include <events.h>
 
 #define CONTROL_DIRECTORY "control"
 #define CONTROL_FILE      "shutdown"

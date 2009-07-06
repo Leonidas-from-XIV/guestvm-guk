@@ -64,7 +64,7 @@ static void verify_object(struct object *object, int thread_id)
 {
     u32 id = ((unsigned long)object - (unsigned long)objects[thread_id]) 
                                                         / sizeof(struct object);
-    u8 *test_value = (u8 *)object->pointer, *pointer;
+    uint8_t *test_value = (uint8_t *)object->pointer, *pointer;
     int i;
 
     if(!object->allocated)
@@ -80,7 +80,7 @@ fail:
            " got=%x, expected=%x\n",
             id, object->size, i, test_value[i], id & 0xFF);
  
-    pointer = (u8 *)objects[thread_id][id].pointer;
+    pointer = (uint8_t *)objects[thread_id][id].pointer;
 
     PRINTK("Object %d, size: %d, pointer=%lx\n",
                id, objects[thread_id][id].size, 
