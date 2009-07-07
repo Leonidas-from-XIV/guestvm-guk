@@ -54,6 +54,7 @@ struct cpu_private
     struct shadow_time_info shadow_time;
     int    cpu_state;
     evtchn_port_t ipi_port;
+    void *db_support;
 };
 /* per cpu private data */
 extern struct cpu_private percpu[];

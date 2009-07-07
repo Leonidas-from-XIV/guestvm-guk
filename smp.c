@@ -93,6 +93,7 @@ static void init_cpu_pda(unsigned int cpu)
     memset(&per_cpu(cpu, shadow_time), 0, sizeof(struct shadow_time_info));
     per_cpu(cpu, ipi_port) = evtchn_alloc_ipi(ipi_handler, cpu, NULL);
     per_cpu(cpu, cpu_state) = cpu == 0 ? CPU_UP : CPU_SLEEPING;
+    per_cpu(cpu, db_support) = NULL;
 }
 
 void smp_signal_cpu(int cpu)

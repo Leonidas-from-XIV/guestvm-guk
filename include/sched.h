@@ -85,6 +85,7 @@ struct thread {
     struct list_head  ready_list; /* links thread into run queue, zombie queue, joiner queue */
     struct list_head  joiners; /* list of threads that wait for this thread to die */
     struct list_head  aux_thread_list; /* not really needed, could use ready_list */
+    void *db_data;                 /* debugger may store info here */
 };
 
 extern struct list_head thread_list; /* a list of threads in the system */
@@ -116,6 +117,7 @@ void idle_thread_fn(void *data);
 #define AUX2_FLAG               0x00000800     /* Predefined spare flag */
 #define SLEEP_FLAG              0x00001000     /* Sleeping */
 #define APPSCHED_FLAG           0x00002000     /* Thread is attached to the application scheduler */
+#define WATCH_FLAG              0x00004000     /* Thread is at watchpoint */
 
 #define DEFINE_THREAD_FLAG(flag_name, flag_set_prefix, funct_name)   \
 static unsigned long inline flag_set_prefix##funct_name(             \
@@ -148,6 +150,7 @@ DEFINE_THREAD_FLAG(AUX1, is_, aux1);
 DEFINE_THREAD_FLAG(AUX2, is_, aux2);
 DEFINE_THREAD_FLAG(SLEEP, is_, sleeping);
 DEFINE_THREAD_FLAG(APPSCHED, is_, appsched);
+DEFINE_THREAD_FLAG(WATCH, is_, watchpoint);
 
 #define switch_threads(prev, next, last) arch_switch_threads(prev, next, last)
 
