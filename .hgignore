@@ -1,0 +1,8 @@
+syntax: glob
+
+*.o
+arch/x86/*.o
+arch/x86/*.a
+include/xen
+guk
+guk.gz
