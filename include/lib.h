@@ -118,7 +118,9 @@ char * strcat(char * dest, const char * src);
 char  *strdup(const char *s);
 
 
+#ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+#endif
 
 struct kvec {
     void *iov_base;

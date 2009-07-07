@@ -32,6 +32,8 @@
 #ifndef XENBUS_H__
 #define XENBUS_H__
 
+#include <xen/xen.h>
+
 typedef unsigned long xenbus_transaction_t;
 #define XBT_NIL ((xenbus_transaction_t)0)
 

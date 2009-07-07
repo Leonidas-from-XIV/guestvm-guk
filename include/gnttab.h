@@ -32,6 +32,7 @@
 #ifndef __GNTTAB_H__
 #define __GNTTAB_H__
 
+#include <xen/xen.h>
 #include <xen/grant_table.h>
 
 void init_gnttab(void);

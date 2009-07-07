@@ -32,8 +32,6 @@
 #ifndef _SPINLOCK_H_
 #define _SPINLOCK_H_
 
-#include <lib.h>
-
 /*
  * lock debugging:
  * count locks and unlocks of a thread; 

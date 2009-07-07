@@ -32,12 +32,13 @@
 #ifndef __SCHED_H__
 #define __SCHED_H__
 
-#include <os.h>
 #include <types.h>
 #include <list.h>
 #include <time.h>
 #include <arch_sched.h>
 #include <spinlock.h>
+#include <bug.h>
+#include <traps.h>
 
 struct thread {
     int               preempt_count; /*  0 => preemptable,

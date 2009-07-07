@@ -33,10 +33,6 @@
 #ifndef __ARCH_ASM_SPINLOCK_H
 #define __ARCH_ASM_SPINLOCK_H
 
-#include <lib.h>
-#include <os.h>
-
-
 #define ARCH_SPIN_LOCK_UNLOCKED (spinlock_t) { 1 }
 
 /*
@@ -55,6 +51,11 @@ static inline void cpu_relax(void)
 	__asm__ __volatile__(cpu_relax_string: : :"memory");
 }
 
+#ifdef CONFIG_SMP
+#define LOCK "lock ; "
+#else
+#define LOCK ""
+#endif
 
 #define spin_lock_string \
         "1:\n" \

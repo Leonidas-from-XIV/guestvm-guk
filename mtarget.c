@@ -39,7 +39,6 @@
 #include <sched.h>
 #include <service.h>
 #include <init.h>
-#include <gnttab.h>
 #include <shutdown.h>
 #include <xenbus.h>
 #include <lib.h>
@@ -47,6 +46,7 @@
 #include <trace.h>
 #include <mtarget.h>
 #include <mm.h>
+#include <gnttab.h>
 
 #define CONTROL_DIRECTORY "memory"
 #define WATCH_TOKEN        "target"

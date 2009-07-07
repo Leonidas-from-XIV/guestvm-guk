@@ -56,6 +56,8 @@
 #ifndef _ARCH_MM_H_
 #define _ARCH_MM_H_
 
+#include <xen/xen.h>
+
 #if defined(__i386__)
 #include <xen/arch-x86_32.h>
 #elif defined(__x86_64__)

@@ -32,8 +32,6 @@
 #ifndef __ARCH_SCHED_H__
 #define __ARCH_SCHED_H__
 
-#include <mm.h>
-
 /* NOTE: when you change this, change the corresponding value in x86_[32/64].S
  * */
 #define STACK_SIZE_PAGE_ORDER    2

@@ -39,6 +39,7 @@
 #include <trace.h>
 #include <spinlock.h>
 #include <sched.h>
+#include <os.h>
 
 //static long base_time = 0;
 

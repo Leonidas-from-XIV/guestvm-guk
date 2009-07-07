@@ -85,12 +85,16 @@ extern s64 guk_time_addend;
 #define NSEC_TO_SEC(_nsec)      ((_nsec) / 1000000000ULL)
 
 /* wall clock time  */
+#ifndef _STRUCT_TIMEVAL
+#define _STRUCT_TIMEVAL
 typedef long time_t;
 typedef long suseconds_t;
 struct timeval {
 	time_t		tv_sec;		/* seconds */
 	suseconds_t	tv_usec;	/* microseconds */
 };
+#endif
+
 
 struct timespec {
     time_t      ts_sec;

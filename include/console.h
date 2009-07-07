@@ -67,8 +67,7 @@
 #ifndef _LIB_CONSOLE_H_
 #define _LIB_CONSOLE_H_
 
-#include <types.h>
-#include <traps.h>
+#include <stdarg.h>
 
 void guk_printk(const char *fmt, ...);
 void guk_xprintk(const char *fmt, ...);
