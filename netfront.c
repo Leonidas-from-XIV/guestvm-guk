@@ -51,9 +51,9 @@
 #include <guk/arch_sched.h>
 #include <guk/smp.h>
 #include <guk/trace.h>
+#include <guk/spinlock.h>
 
 #include <xen/io/netif.h>
-#include <spinlock.h>
 #include <errno.h>
 
 static struct net_info {

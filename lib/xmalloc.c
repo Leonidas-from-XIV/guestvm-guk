@@ -69,11 +69,11 @@
 #include <guk/mm.h>
 #include <guk/sched.h>
 #include <guk/trace.h>
+#include <guk/spinlock.h>
 
 #include <types.h>
 #include <lib.h>
 #include <list.h>
-#include <spinlock.h>
 
 static LIST_HEAD(freelist);
 static spinlock_t freelist_lock = SPIN_LOCK_UNLOCKED;

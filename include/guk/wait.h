@@ -34,8 +34,8 @@
 
 #include <guk/sched.h>
 #include <guk/os.h>
+#include <guk/spinlock.h>
 
-#include <spinlock.h>
 #include <list.h>
 #include <lib.h>
 

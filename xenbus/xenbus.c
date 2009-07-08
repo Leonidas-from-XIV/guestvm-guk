@@ -58,8 +58,8 @@
 #include <guk/smp.h>
 #include <guk/trace.h>
 #include <guk/completion.h>
+#include <guk/spinlock.h>
 
-#include <spinlock.h>
 #include <lib.h>
 #include <errno.h>
 

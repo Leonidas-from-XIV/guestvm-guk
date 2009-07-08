@@ -34,8 +34,8 @@
 
 #include <types.h>
 #include <list.h>
-#include <spinlock.h>
 
+#include <guk/spinlock.h>
 #include <guk/traps.h>
 #include <guk/time.h>
 #include <guk/bug.h>

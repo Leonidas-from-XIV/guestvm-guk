@@ -30,7 +30,7 @@
  * 
  */
 
-#include <spinlock.h>
+#include <guk/spinlock.h>
 #include <guk/os.h>
 #include <guk/sched.h>
 #include <guk/arch_sched.h>

@@ -49,12 +49,12 @@
 #include <guk/db.h>
 #include <guk/sched.h>
 #include <guk/arch_sched.h>
+#include <guk/spinlock.h>
 #include <guk/trace.h>
 
 #include <x86/traps.h>
 
 #include <dbif.h>
-#include <spinlock.h>
 
 #define DB_DEBUG
 #ifdef DB_DEBUG

@@ -32,11 +32,11 @@
 /*
   Author: Grzegorz Milos, Sun Microsystems, Inc., summer intern 2007.
  */
-#include <os.h>
-#include <sched.h>
-#include <spinlock.h>
-#include <time.h>
-#include <xmalloc.h>
+#include <guk/os.h>
+#include <guk/sched.h>
+#include <guk/spinlock.h>
+#include <guk/time.h>
+#include <guk/xmalloc.h>
 
 extern u32 rand_int(void);
 extern void seed(u32 s);

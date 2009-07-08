@@ -46,8 +46,8 @@
 #include <guk/events.h>
 #include <guk/trace.h>
 #include <guk/completion.h>
+#include <guk/spinlock.h>
 
-#include <spinlock.h>
 #include <list.h>
 #include <lib.h>
 #include <types.h>

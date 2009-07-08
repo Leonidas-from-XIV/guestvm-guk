@@ -51,10 +51,10 @@
 #include <guk/blk_front.h>
 #include <guk/completion.h>
 #include <guk/xmalloc.h>
+#include <guk/spinlock.h>
 #include <xen/io/blkif.h>
 #include <xen/io/xenbus.h>
 
-#include <spinlock.h>
 #include <errno.h>
 
 #define MAX_PATH      64

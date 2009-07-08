@@ -38,9 +38,9 @@
 #include <guk/trace.h>
 #include <guk/sched.h>
 #include <guk/os.h>
+#include <guk/spinlock.h>
 
 #include <lib.h>
-#include <spinlock.h>
 //static long base_time = 0;
 
 #define TRACE_HYP_CONSOLE 1

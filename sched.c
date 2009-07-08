@@ -84,9 +84,9 @@
 #include <guk/completion.h>
 #include <guk/appsched.h>
 #include <guk/db.h>
+#include <guk/spinlock.h>
 
 #include <maxine_ls.h>
-#include <spinlock.h>
 #include <list.h>
 #include <types.h>
 #include <lib.h>

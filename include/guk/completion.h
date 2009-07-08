@@ -38,8 +38,8 @@
 
 #include <guk/sched.h>
 #include <guk/wait.h>
+#include <guk/spinlock.h>
 
-#include <spinlock.h>
 /* multiple threads can wait for the same completion event */
 struct completion {
     int done;

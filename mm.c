@@ -77,10 +77,10 @@
 #include <guk/xmalloc.h>
 #include <guk/trace.h>
 #include <guk/sched.h>
+#include <guk/spinlock.h>
 #include <xen/memory.h>
 
 #include <types.h>
-#include <spinlock.h>
 #include <lib.h>
 #include <bitmap.h>
 //#define MM_DEBUG

@@ -54,8 +54,7 @@
 #include <guk/trace.h>
 #include <guk/sched.h>
 #include <guk/arch_sched.h>
-
-#include <spinlock.h>
+#include <guk/spinlock.h>
 
 #define NR_RESERVED_ENTRIES 8
 

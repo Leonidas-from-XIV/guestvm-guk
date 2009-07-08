@@ -46,8 +46,9 @@
 #include <guk/trace.h>
 #include <guk/sched.h>
 #include <guk/arch_sched.h>
+#include <guk/spinlock.h>
+
 #include <errno.h>
-#include <spinlock.h>
 
 /* TODO: move this away */
 #define X86_EFLAGS_IF   0x00000200	/* Interrupt Flag */

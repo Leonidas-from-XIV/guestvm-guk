@@ -71,11 +71,11 @@
 #include <guk/smp.h>
 #include <guk/trace.h>
 #include <guk/sched.h>
+#include <guk/spinlock.h>
 #include <x86/arch_sched.h>
 
 #include <xen/vcpu.h>
 
-#include <spinlock.h>
 #include <types.h>
 #include <lib.h>
 /************************************************************************
