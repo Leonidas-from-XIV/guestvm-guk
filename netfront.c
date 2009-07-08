@@ -39,20 +39,22 @@
              Harald Roeck, Sun Microsystems, Inc., summer intern 2008.
  */
 
-#include <os.h>
-#include <init.h>
-#include <service.h>
-#include <xenbus.h>
-#include <events.h>
-#include <errno.h>
+#include <guk/os.h>
+#include <guk/init.h>
+#include <guk/service.h>
+#include <guk/xenbus.h>
+#include <guk/events.h>
+#include <guk/gnttab.h>
+#include <guk/xmalloc.h>
+#include <guk/time.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+#include <guk/smp.h>
+#include <guk/trace.h>
+
 #include <xen/io/netif.h>
-#include <gnttab.h>
-#include <xmalloc.h>
-#include <time.h>
-#include <sched.h>
-#include <smp.h>
 #include <spinlock.h>
-#include <trace.h>
+#include <errno.h>
 
 static struct net_info {
     struct netif_tx_front_ring tx;

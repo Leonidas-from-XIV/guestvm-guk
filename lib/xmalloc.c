@@ -65,14 +65,15 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <os.h>
-#include <mm.h>
+#include <guk/os.h>
+#include <guk/mm.h>
+#include <guk/sched.h>
+#include <guk/trace.h>
+
 #include <types.h>
 #include <lib.h>
 #include <list.h>
 #include <spinlock.h>
-#include <sched.h>
-#include <trace.h>
 
 static LIST_HEAD(freelist);
 static spinlock_t freelist_lock = SPIN_LOCK_UNLOCKED;

@@ -47,10 +47,10 @@
 
 #ifndef __ASSEMBLY__
 #include <types.h>
-#include <hypervisor.h>
-#include <smp.h>
-#include <trace.h>
-#include <traps.h>
+#include <guk/hypervisor.h>
+#include <guk/smp.h>
+#include <guk/trace.h>
+#include <guk/traps.h>
 
 extern int guk_smp_init_completed;
 extern int smp_active;
@@ -72,7 +72,7 @@ static int inline smp_processor_id(void)
 }
 #endif
 
-#include <bug.h>
+#include <x86/bug.h>
 
 #endif
 #include <xen/xen.h>

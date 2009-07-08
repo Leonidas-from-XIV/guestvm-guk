@@ -46,21 +46,24 @@
  *
  ****************************************************************************
  **/
-#include <os.h>
-#include <mm.h>
-#include <traps.h>
-#include <lib.h>
-#include <xenbus.h>
-#include <events.h>
-#include <errno.h>
-#include <sched.h>
-#include <wait.h>
-#include <xen/io/xs_wire.h>
+#include <guk/os.h>
+#include <guk/mm.h>
+#include <guk/traps.h>
+#include <guk/xenbus.h>
+#include <guk/events.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+#include <guk/wait.h>
+#include <guk/xmalloc.h>
+#include <guk/smp.h>
+#include <guk/trace.h>
+#include <guk/completion.h>
+
 #include <spinlock.h>
-#include <xmalloc.h>
-#include <smp.h>
-#include <trace.h>
-#include <completion.h>
+#include <lib.h>
+#include <errno.h>
+
+#include <xen/io/xs_wire.h>
 
 #define min(x,y) ({                       \
         typeof(x) tmpx = (x);                 \

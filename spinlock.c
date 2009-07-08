@@ -31,9 +31,10 @@
  */
 
 #include <spinlock.h>
-#include <os.h>
-#include <sched.h>
-#include <xmalloc.h>
+#include <guk/os.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+#include <guk/xmalloc.h>
 
 /*
  * This could be a long-held lock. We both prepare to spin for a long
@@ -62,8 +63,7 @@ void guk_##op##_lock(locktype##_t *lock)			                \
                         if ((lock)->spin_count > SPIN_LOCK_MAX) {       \
                           struct thread *t = current;                   \
                           xprintk("stuck spinlock %lx, thread %d\n", (lock), t->id); \
-			  print_backtrace(); \
-                          crash_exit();                                    \
+                          crash_exit_backtrace();                                    \
                         }                                               \
 			cpu_relax();					\
                 }                                                       \
@@ -94,10 +94,9 @@ unsigned long guk_##op##_lock_irqsave(locktype##_t *lock)	\
                         if ((lock)->spin_count > SPIN_LOCK_MAX) {       \
                           struct thread *t = current;                   \
                           xprintk("stuck spinlock %ld, %lx, thread %d, owner %d\n", NOW(), (lock), t->id, (lock)->owner->id); \
-			  print_backtrace(); \
                           xprintk("owner stack %lx\n", (lock)->owner->sp); \
 			  dump_sp((unsigned long *)(lock)->owner->sp, xprintk); \
-                          crash_exit();                                    \
+                          crash_exit_backtrace();                                    \
                         }                                               \
 			cpu_relax();					\
                 }                                                       \

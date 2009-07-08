@@ -64,25 +64,26 @@
  *          Mick Jordan Sun Microsystems, Inc.
 */
 
-#include <os.h>
-#include <init.h>
-#include <service.h>
-#include <hypervisor.h>
-#include <mm.h>
-#include <events.h>
-#include <time.h>
-#include <types.h>
-#include <lib.h>
-#include <sched.h>
-#include <smp.h>
-#include <xenbus.h>
-#include <shutdown.h>
-#include <gnttab.h>
-#include <db.h>
-#include <trace.h>
+#include <guk/os.h>
+#include <guk/init.h>
+#include <guk/service.h>
+#include <guk/hypervisor.h>
+#include <guk/mm.h>
+#include <guk/events.h>
+#include <guk/time.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+#include <guk/smp.h>
+#include <guk/xenbus.h>
+#include <guk/shutdown.h>
+#include <guk/gnttab.h>
+#include <guk/db.h>
+#include <guk/trace.h>
 #include <xen/features.h>
 #include <xen/version.h>
 
+#include <types.h>
+#include <lib.h>
 
 uint8_t xen_features[XENFEAT_NR_SUBMAPS * 32];
 
@@ -285,6 +286,22 @@ void crash_exit_msg(char *msg) {
 
 void crash_exit(void) {
   crash_exit_msg("no message");
+}
+
+#define print_backtrace(thread) \
+    if(thread) { \
+	void *ip;\
+	void **bp;\
+	xprintk("Current Thread: %s, %d, CPU=%d\n", thread->name, thread->id, thread->cpu);\
+	bp = get_bp(); \
+	ip = *bp; \
+        dump_sp((unsigned long*)get_sp(), xprintk); \
+	backtrace(bp, 0); \
+    }
+
+void crash_exit_backtrace(void) {
+	print_backtrace(current);
+	crash_exit_msg("no message");
 }
 
 void ok_exit(void) {

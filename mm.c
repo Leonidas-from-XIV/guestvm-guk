@@ -70,19 +70,19 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include <os.h>
-#include <hypervisor.h>
-#include <mm.h>
-#include <p2m.h>
-#include <types.h>
-#include <lib.h>
-#include <xmalloc.h>
-#include <spinlock.h>
-#include <trace.h>
-#include <sched.h>
-#include <bitmap.h>
+#include <guk/os.h>
+#include <guk/hypervisor.h>
+#include <guk/mm.h>
+#include <guk/p2m.h>
+#include <guk/xmalloc.h>
+#include <guk/trace.h>
+#include <guk/sched.h>
 #include <xen/memory.h>
 
+#include <types.h>
+#include <spinlock.h>
+#include <lib.h>
+#include <bitmap.h>
 //#define MM_DEBUG
 
 /*

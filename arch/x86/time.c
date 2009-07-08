@@ -63,20 +63,21 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#include <guk/os.h>
+#include <guk/traps.h>
+#include <guk/hypervisor.h>
+#include <guk/events.h>
+#include <guk/time.h>
+#include <guk/smp.h>
+#include <guk/trace.h>
+#include <guk/sched.h>
+#include <x86/arch_sched.h>
 
-#include <os.h>
-#include <traps.h>
-#include <types.h>
-#include <hypervisor.h>
-#include <events.h>
-#include <time.h>
-#include <lib.h>
-#include <smp.h>
 #include <xen/vcpu.h>
-#include <spinlock.h>
-#include <trace.h>
-#include <sched.h>
 
+#include <spinlock.h>
+#include <types.h>
+#include <lib.h>
 /************************************************************************
  * Time functions
  *************************************************************************/

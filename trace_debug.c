@@ -36,8 +36,8 @@
  *
  * Author: Mick Jordan, Sun Microsystems Inc.
  */
-#include <sched.h>
-#include <trace.h>
+#include <guk/sched.h>
+#include <guk/trace.h>
 
 
 void guk_trace_cpu_fn(void) {

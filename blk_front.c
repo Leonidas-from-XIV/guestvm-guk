@@ -38,22 +38,24 @@
  * TODO: support multiple devices
  */
 
-#include <os.h>
-#include <service.h>
-#include <init.h>
-#include <xenbus.h>
-#include <events.h>
-#include <errno.h>
+#include <guk/os.h>
+#include <guk/service.h>
+#include <guk/init.h>
+#include <guk/xenbus.h>
+#include <guk/events.h>
+#include <guk/gnttab.h>
+#include <guk/time.h>
+#include <guk/trace.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+#include <guk/blk_front.h>
+#include <guk/completion.h>
+#include <guk/xmalloc.h>
 #include <xen/io/blkif.h>
 #include <xen/io/xenbus.h>
-#include <gnttab.h>
-#include <xmalloc.h>
-#include <time.h>
-#include <trace.h>
-#include <sched.h>
+
 #include <spinlock.h>
-#include <blk_front.h>
-#include <completion.h>
+#include <errno.h>
 
 #define MAX_PATH      64
 #define MAX_DEVICES    1
@@ -262,10 +264,10 @@ static char *blk_explore(void)
     int i;
 
     msg = xenbus_ls(XBT_NIL, DEVICE_STRING, &dirs);
-    if (msg) {
-	free(msg);
-	return NULL;
-    }
+	if (msg) {
+		free(msg);
+		return NULL;
+	}
 
     for (i=0; dirs[i]; i++) {
 	if(i>0)

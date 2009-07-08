@@ -29,15 +29,18 @@
  * designated nationals lists is strictly prohibited.
  * 
  */
-#include <os.h>
-#include <traps.h>
-#include <hypervisor.h>
-#include <mm.h>
-#include <lib.h>
-#include <sched.h>
-#include <db.h>
-#include <trace.h>
+#include <guk/os.h>
+#include <guk/traps.h>
+#include <guk/hypervisor.h>
+#include <guk/mm.h>
+#include <guk/sched.h>
+#include <guk/db.h>
+#include <guk/trace.h>
 
+#include <x86/arch_sched.h>
+#include <x86/traps.h>
+
+#include <lib.h>
 /*
  * These are assembler stubs in entry.S.
  * They are the actual entry points for virtual exceptions.

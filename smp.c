@@ -36,18 +36,18 @@
  *          Mick Jordan Sun Microsystems, Inc.
  */
 
-#include <os.h>
-#include <mm.h>
-#include <smp.h>
-#include <time.h>
-#include <events.h>
-#include <spinlock.h>
+#include <guk/os.h>
+#include <guk/mm.h>
+#include <guk/smp.h>
+#include <guk/time.h>
+#include <guk/events.h>
 #include <xen/xen.h>
 #include <xen/vcpu.h>
-#include <trace.h>
-#include <sched.h>
-#include <arch_sched.h>
+#include <guk/trace.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
 #include <errno.h>
+#include <spinlock.h>
 
 /* TODO: move this away */
 #define X86_EFLAGS_IF   0x00000200	/* Interrupt Flag */

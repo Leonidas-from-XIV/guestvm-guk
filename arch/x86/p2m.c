@@ -66,16 +66,17 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include <os.h>
-#include <hypervisor.h>
-#include <mm.h>
-#include <types.h>
-#include <lib.h>
-#include <xmalloc.h>
-#include <trace.h>
-#include <sched.h>
+#include <guk/os.h>
+#include <guk/hypervisor.h>
+#include <guk/mm.h>
+#include <guk/xmalloc.h>
+#include <guk/trace.h>
+#include <guk/sched.h>
+#include <x86/arch_sched.h>
 #include <xen/memory.h>
 
+#include <types.h>
+#include <lib.h>
 /* This code maintains the pfn_to_mfn_frame_list in arch_shared_info
  * that is used by save/restore.
  *

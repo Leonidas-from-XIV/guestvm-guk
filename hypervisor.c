@@ -56,11 +56,11 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include <os.h>
-#include <hypervisor.h>
-#include <events.h>
-#include <sched.h>
-#include <smp.h>
+#include <guk/os.h>
+#include <guk/hypervisor.h>
+#include <guk/events.h>
+#include <guk/sched.h>
+#include <guk/smp.h>
 
 #define active_evtchns(idx)              \
     (HYPERVISOR_shared_info->evtchn_pending[idx] &                \

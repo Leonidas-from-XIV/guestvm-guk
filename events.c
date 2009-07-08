@@ -48,14 +48,15 @@
  ****************************************************************************
  */
 
-#include <os.h>
-#include <mm.h>
-#include <hypervisor.h>
-#include <events.h>
-#include <lib.h>
-#include <sched.h>
-#include <smp.h>
+#include <guk/os.h>
+#include <guk/mm.h>
+#include <guk/hypervisor.h>
+#include <guk/events.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+#include <guk/smp.h>
 
+#include <lib.h>
 #define NR_EVS 1024
 
 /* this represents a event handler. Chaining or sharing is not allowed */
@@ -107,7 +108,7 @@ void do_event(evtchn_port_t port)
     ev_action_t  *action;
     int cpu = smp_processor_id();
 
-    add_preempt_count(IRQ_ACTIVE);
+    add_preempt_count(current, IRQ_ACTIVE);
     mask_evtchn(port);
     clear_evtchn(port);
     if (port >= NR_EVS) {
@@ -128,14 +129,14 @@ void do_event(evtchn_port_t port)
 	goto out;
     }
     //xprintk("DEe %d %x %d\n", this_cpu(current_thread)->id, this_cpu(current_thread)->preempt_count, port);
-    //print_backtrace();
+    //print_backtrace(current);
     /* call the handler */
     if(action->handler)
 	action->handler(port, action->data);
 
 out:
     unmask_evtchn(port);
-    sub_preempt_count(IRQ_ACTIVE);
+    sub_preempt_count(current, IRQ_ACTIVE);
     //xprintk("DEx %d %x %d\n", this_cpu(current_thread)->id, this_cpu(current_thread)->preempt_count, port);
 }
 

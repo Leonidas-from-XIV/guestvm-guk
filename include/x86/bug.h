@@ -1,7 +1,7 @@
 #ifndef _BUG_H_
 #define _BUG_H_
 
-#include <console.h>
+#include <guk/console.h>
 
 #if __x86_64__
 static inline void **get_bp(void)
@@ -28,27 +28,18 @@ static inline void **get_bp(void)
 
 #endif
 
-#define print_backtrace() \
-    if(current) { \
-	void *ip;\
-	void **bp;\
-	xprintk("Current Thread: %s, %d, CPU=%d\n", current->name, current->id, current->cpu);\
-	bp = get_bp(); \
-	ip = *bp; \
-        dump_sp((unsigned long*)get_sp(), xprintk); \
-	backtrace(bp, 0); \
-    }
-
 extern void guk_crash_exit(void);
+extern void guk_crash_exit_backtrace(void);
 extern void guk_crash_exit_msg(char *msg);
 extern void guk_ok_exit(void);
 
 #define crash_exit guk_crash_exit
+#define crash_exit_backtrace guk_crash_exit_backtrace
 #define ok_exit guk_ok_exit
 #define crash_exit_msg guk_crash_exit_msg
 
 #define BUG_ON(x) do { \
-    if (x) {xprintk("BUG at %s:%d\n", __FILE__, __LINE__); print_backtrace(); crash_exit(); } \
+    if (x) {xprintk("BUG at %s:%d\n", __FILE__, __LINE__); crash_exit_backtrace(); } \
 } while (0)
 
 #define BUG() BUG_ON(1)

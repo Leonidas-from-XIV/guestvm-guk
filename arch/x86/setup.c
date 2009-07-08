@@ -57,9 +57,10 @@
  *
  */
 
-#include <os.h>
-#include <trace.h>
-#include <sched.h>
+#include <guk/os.h>
+#include <guk/trace.h>
+#include <guk/sched.h>
+#include <x86/arch_sched.h>
 
 
 /*

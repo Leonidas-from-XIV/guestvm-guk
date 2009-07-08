@@ -65,19 +65,20 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include <os.h>
-#include <hypervisor.h>
-#include <time.h>
-#include <mm.h>
+#include <guk/os.h>
+#include <guk/hypervisor.h>
+#include <guk/time.h>
+#include <guk/mm.h>
+#include <guk/xmalloc.h>
+#include <guk/sched.h>
+#include <guk/smp.h>
+#include <guk/trace.h>
+
+#include <x86/arch_sched.h>
+#include <maxine_ls.h>
+#include <list.h>
 #include <types.h>
 #include <lib.h>
-#include <xmalloc.h>
-#include <list.h>
-#include <sched.h>
-#include <smp.h>
-#include <trace.h>
-#include <maxine_ls.h>
-
 
 /*
  * print a backtrace of the native code; use base frame register to find the stack frames

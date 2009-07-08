@@ -46,8 +46,10 @@
 
 #ifndef _TYPES_H_
 #define _TYPES_H_
+
 #define _LIBC_LIMITS_H_
 #include <limits.h>
+#undef _LIBC_LIMITS_H_
 
 /* FreeBSD compat types */
 typedef unsigned char       u_char;
@@ -77,7 +79,6 @@ typedef  uint32_t u32;
 typedef  int32_t  s32;
 typedef  uint64_t u64;
 typedef  int64_t  s64;
-
 
 typedef signed long     ssize_t;
 #define _SYS_INT_TYPES_H

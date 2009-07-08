@@ -41,17 +41,20 @@
  */
 
 
-#include <os.h>
-#include <xenbus.h>
-#include <xmalloc.h>
-#include <gnttab.h>
-#include <events.h>
-#include <db.h>
+#include <guk/os.h>
+#include <guk/xenbus.h>
+#include <guk/xmalloc.h>
+#include <guk/gnttab.h>
+#include <guk/events.h>
+#include <guk/db.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+#include <guk/trace.h>
+
+#include <x86/traps.h>
+
 #include <dbif.h>
 #include <spinlock.h>
-#include <trace.h>
-#include <sched.h>
-
 
 #define DB_DEBUG
 #ifdef DB_DEBUG

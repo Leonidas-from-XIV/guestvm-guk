@@ -48,10 +48,11 @@
 
 #if !defined HAVE_LIBC
 
-#include <os.h>
-#include <types.h>
+#include <guk/os.h>
+#include <guk/xmalloc.h>
+
 #include <lib.h>
-#include <xmalloc.h>
+#include <types.h>
 
 int memcmp(const void * cs,const void * ct,size_t count)
 {

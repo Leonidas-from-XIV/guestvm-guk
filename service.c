@@ -37,12 +37,12 @@
  */
 
 
-#include <service.h>
-#include <os.h>
-#include <list.h>
-#include <sched.h>
-#include <trace.h>
+#include <guk/service.h>
+#include <guk/os.h>
+#include <guk/sched.h>
+#include <guk/trace.h>
 
+#include <list.h>
 static LIST_HEAD(services);
 
 #define SERV_STOP    0

@@ -29,17 +29,18 @@
  * designated nationals lists is strictly prohibited.
  * 
  */
-#include <os.h>
+#include <guk/os.h>
+#include <guk/wait.h>
+#include <guk/mm.h>
+#include <guk/hypervisor.h>
+#include <guk/events.h>
+#include <guk/xenbus.h>
+#include <guk/smp.h>
+
+#include <xen/io/console.h>
+
 #include <lib.h>
 #include <types.h>
-#include <wait.h>
-#include <mm.h>
-#include <hypervisor.h>
-#include <events.h>
-#include <xenbus.h>
-#include <xen/io/console.h>
-#include <smp.h>
-
 
 static inline struct xencons_interface *xencons_interface(void)
 {

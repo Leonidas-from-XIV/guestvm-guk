@@ -32,13 +32,13 @@
 #ifndef __ARCH_SCHED_H__
 #define __ARCH_SCHED_H__
 
+#include <guk/sched.h>
+#include <x86/bug.h>
+
 /* NOTE: when you change this, change the corresponding value in x86_[32/64].S
  * */
 #define STACK_SIZE_PAGE_ORDER    2
 #define STACK_SIZE               (PAGE_SIZE * (1 << STACK_SIZE_PAGE_ORDER))
-
-extern void guk_backtrace(void **bp, void *ip);
-#define backtrace guk_backtrace
 
 #ifdef __i386__
 #define arch_switch_threads(prev, next, last) do {                      \

@@ -89,8 +89,9 @@ extra_heads := $(foreach dir,$(EXTRA_INC),$(wildcard $(dir)/*.h))
 HDRS += $(extra_heads)
 
 # Add the special header directories to the include paths.
-extra_incl := $(foreach dir,$(EXTRA_INC),-I$(GUK_ROOT)/include/$(dir))
-override CPPFLAGS := -I$(GUK_ROOT)/tools/fs-back -I$(GUK_ROOT)/tools/db-front -I$(GUK_ROOT)/include $(CPPFLAGS) -I$(ARCH_INC)	$(extra_incl)
+#extra_incl := $(foreach dir,$(EXTRA_INC),-I$(GUK_ROOT)/include/$(dir))
+override CPPFLAGS := -I$(GUK_ROOT)/tools/fs-back -I$(GUK_ROOT)/tools/db-front -I$(GUK_ROOT)/include $(CPPFLAGS) 
+#$(extra_incl)
 
 # The name of the architecture specific library.
 # This is on x86_32: libx86_32.a

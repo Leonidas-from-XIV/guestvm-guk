@@ -71,24 +71,25 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include <os.h>
-#include <hypervisor.h>
-#include <time.h>
-#include <mm.h>
+#include <guk/os.h>
+#include <guk/hypervisor.h>
+#include <guk/time.h>
+#include <guk/mm.h>
+#include <guk/xmalloc.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+#include <guk/smp.h>
+#include <guk/events.h>
+#include <guk/trace.h>
+#include <guk/completion.h>
+#include <guk/appsched.h>
+#include <guk/db.h>
+
+#include <maxine_ls.h>
+#include <spinlock.h>
+#include <list.h>
 #include <types.h>
 #include <lib.h>
-#include <xmalloc.h>
-#include <list.h>
-#include <sched.h>
-#include <smp.h>
-#include <events.h>
-#include <spinlock.h>
-#include <trace.h>
-#include <completion.h>
-#include <appsched.h>
-#include <db.h>
-#include <maxine_ls.h>
-
 
 #ifdef SCHED_DEBUG
 #define DEBUG(_f, _a...) \
@@ -155,6 +156,10 @@ int guk_sched_num_cpus(void) {
 static uint16_t debug_thread_id = DEBUG_THREAD_ID;
 static uint16_t thread_id = DEBUG_THREAD_ID + 2;
 
+struct thread *guk_current()
+{
+	return current;
+}
 
 /* Queues */
 
@@ -675,9 +680,9 @@ need_resched:
     /* the regs is not valid anymore, so point it to zero */
     ti->regs = NULL;
 
-    add_preempt_count(PREEMPT_ACTIVE);
+    add_preempt_count(current, PREEMPT_ACTIVE);
     schedule();
-    sub_preempt_count(PREEMPT_ACTIVE);
+    sub_preempt_count(current, PREEMPT_ACTIVE);
 
     BUG_ON(ti->preempt_count != 0);
     BUG_ON(ti->regs != NULL);
@@ -715,11 +720,11 @@ void preempt_schedule_irq(void)
     BUG_ON(ti->preempt_count || !irqs_disabled());
 
 need_resched:
-    add_preempt_count(PREEMPT_ACTIVE);
+    add_preempt_count(current, PREEMPT_ACTIVE);
     local_irq_enable();
     schedule();
     local_irq_disable();
-    sub_preempt_count(PREEMPT_ACTIVE);
+    sub_preempt_count(current, PREEMPT_ACTIVE);
 
     BUG_ON(ti->preempt_count != 0);
     /* If the thread is being single stepped, we should block and reschedule:
@@ -906,7 +911,7 @@ void block(struct thread *thread)
 	}
     } else {
 	ttprintk("WARNING: try to block a non runnable thread %d %s\n", thread->id, thread->name);
-	print_backtrace();
+	backtrace(get_bp(), 0);
     }
 }
 
@@ -956,7 +961,7 @@ void guk_wake(struct thread *thread)
 	    db_wake(thread);
 	} else {
 	    //xprintk("WARNING: waking a runnable thread %d %s %x\n", thread->id, thread->name, thread->flags);
-	    //print_backtrace();
+	    //print_backtrace(current);
 	}
     }
 }

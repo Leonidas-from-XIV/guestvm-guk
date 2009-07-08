@@ -29,7 +29,7 @@
 # designated nationals lists is strictly prohibited.
 # 
 #
-#include <os.h>
+#include <x86/os.h>
 #include <xen/features.h>
 
 .section __xen_guest

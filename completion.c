@@ -35,21 +35,22 @@
  * Author: Harald Roeck, Sun Microsystems, Inc., summer intern 2008
  */
 
-#include <os.h>
-#include <hypervisor.h>
-#include <time.h>
-#include <mm.h>
-#include <types.h>
-#include <lib.h>
-#include <xmalloc.h>
-#include <list.h>
-#include <sched.h>
-#include <smp.h>
-#include <events.h>
-#include <spinlock.h>
-#include <trace.h>
-#include <completion.h>
+#include <guk/os.h>
+#include <guk/hypervisor.h>
+#include <guk/time.h>
+#include <guk/mm.h>
+#include <guk/xmalloc.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+#include <guk/smp.h>
+#include <guk/events.h>
+#include <guk/trace.h>
+#include <guk/completion.h>
 
+#include <spinlock.h>
+#include <list.h>
+#include <lib.h>
+#include <types.h>
 /*
  * block current thread until comp is posted
  */

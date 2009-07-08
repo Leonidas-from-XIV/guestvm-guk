@@ -37,18 +37,20 @@
  * Changes: Mick Jordan, Sun Microsystems, Inc..
  */
 
-#include <fs.h>
-#include <os.h>
-#include <init.h>
-#include <service.h>
-#include <sched.h>
-#include <list.h>
-#include <xmalloc.h>
-#include <xenbus.h>
-#include <gnttab.h>
-#include <events.h>
+#include <guk/fs.h>
+#include <guk/os.h>
+#include <guk/init.h>
+#include <guk/service.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+#include <guk/xmalloc.h>
+#include <guk/xenbus.h>
+#include <guk/gnttab.h>
+#include <guk/events.h>
+#include <guk/trace.h>
+
 #include <fsif.h>
-#include <trace.h>
+#include <list.h>
 
 #ifdef FS_DEBUG
 #define DEBUG(_f, _a...) \

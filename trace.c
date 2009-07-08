@@ -35,12 +35,12 @@
  * Author: Mick Jordan, Sun Microsystems, Inc.
  */
 
-#include <lib.h>
-#include <trace.h>
-#include <spinlock.h>
-#include <sched.h>
-#include <os.h>
+#include <guk/trace.h>
+#include <guk/sched.h>
+#include <guk/os.h>
 
+#include <lib.h>
+#include <spinlock.h>
 //static long base_time = 0;
 
 #define TRACE_HYP_CONSOLE 1

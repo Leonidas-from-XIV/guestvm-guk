@@ -66,17 +66,17 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include <os.h>
-#include <hypervisor.h>
-#include <mm.h>
-#include <p2m.h>
-#include <types.h>
-#include <lib.h>
-#include <xmalloc.h>
-#include <trace.h>
-#include <sched.h>
+#include <guk/os.h>
+#include <guk/hypervisor.h>
+#include <guk/mm.h>
+#include <guk/p2m.h>
+#include <guk/xmalloc.h>
+#include <guk/trace.h>
+#include <guk/sched.h>
 #include <xen/memory.h>
 
+#include <types.h>
+#include <lib.h>
 #ifdef MM_DEBUG
 #define DEBUG(_f, _a...) \
     xprintk("GUK(file=mm.c, line=%d) " _f "\n", __LINE__, ## _a)

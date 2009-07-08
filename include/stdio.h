@@ -1,18 +1,19 @@
-
 #ifndef GUK_STDIO_H
 #define GUK_STDIO_H
-#define _LIBC_LIMITS_H_
 
+/* include GCC headers */
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdbool.h>
-
-#include <limits.h>
 #include <float.h>
+#define _LIBC_LIMITS_H_
+#include <limits.h>
+#undef _LIBC_LIMITS_H_
 
-/* fake FILE type */
-typedef void *FILE;
+/* include guk lib */
+#include <lib.h>
+
+/* defined in solaris builts */
 #define _NFILE 60
 
-#undef _LIBC_LIMITS_H_
 #endif

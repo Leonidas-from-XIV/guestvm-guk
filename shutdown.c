@@ -37,20 +37,21 @@
  */
 
 
-#include <sched.h>
-#include <service.h>
-#include <init.h>
-#include <gnttab.h>
-#include <shutdown.h>
-#include <xenbus.h>
-#include <lib.h>
-#include <xmalloc.h>
-#include <trace.h>
-#include <p2m.h>
-#include <hypervisor.h>
-#include <os.h>
-#include <events.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+#include <guk/service.h>
+#include <guk/init.h>
+#include <guk/gnttab.h>
+#include <guk/shutdown.h>
+#include <guk/xenbus.h>
+#include <guk/xmalloc.h>
+#include <guk/trace.h>
+#include <guk/p2m.h>
+#include <guk/hypervisor.h>
+#include <guk/os.h>
+#include <guk/events.h>
 
+#include <lib.h>
 #define CONTROL_DIRECTORY "control"
 #define CONTROL_FILE      "shutdown"
 #define SHUTDOWN_PATH     CONTROL_DIRECTORY "/" CONTROL_FILE

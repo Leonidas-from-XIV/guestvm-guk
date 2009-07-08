@@ -51,7 +51,7 @@ typedef struct spinlock {
 #endif
 } spinlock_t;
 
-#include "arch_spinlock.h"
+#include <guk/arch_spinlock.h>
 
 #define SPIN_LOCK_UNLOCKED ARCH_SPIN_LOCK_UNLOCKED
 

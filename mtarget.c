@@ -36,17 +36,18 @@
  * Author: Mick Jordan, Sun Microsystems, Inc.
  */
 
-#include <sched.h>
-#include <service.h>
-#include <init.h>
-#include <shutdown.h>
-#include <xenbus.h>
+#include <guk/sched.h>
+#include <guk/service.h>
+#include <guk/init.h>
+#include <guk/shutdown.h>
+#include <guk/xenbus.h>
+#include <guk/xmalloc.h>
+#include <guk/trace.h>
+#include <guk/mtarget.h>
+#include <guk/mm.h>
+#include <guk/gnttab.h>
+
 #include <lib.h>
-#include <xmalloc.h>
-#include <trace.h>
-#include <mtarget.h>
-#include <mm.h>
-#include <gnttab.h>
 
 #define CONTROL_DIRECTORY "memory"
 #define WATCH_TOKEN        "target"

@@ -48,12 +48,14 @@
  *
  ****************************************************************************
  */
-#include <os.h>
-#include <mm.h>
-#include <gnttab.h>
+#include <guk/os.h>
+#include <guk/mm.h>
+#include <guk/gnttab.h>
+#include <guk/trace.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
+
 #include <spinlock.h>
-#include <trace.h>
-#include <sched.h>
 
 #define NR_RESERVED_ENTRIES 8
 

@@ -87,13 +87,13 @@
 
 #if !defined HAVE_LIBC
 
-#include <os.h>
-#include <types.h>
-#include <hypervisor.h>
-#include <lib.h>
-#include <mm.h>
-#include <ctype.h>
+#include <guk/os.h>
+#include <guk/hypervisor.h>
+#include <guk/mm.h>
 
+#include <types.h>
+#include <lib.h>
+#include <ctype.h>
 /**
  * simple_strtoul - convert a string to an unsigned long
  * @cp: The start of the string

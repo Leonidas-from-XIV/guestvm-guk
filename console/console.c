@@ -64,19 +64,19 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
-#include <os.h>
-#include <types.h>
-#include <wait.h>
-#include <mm.h>
-#include <hypervisor.h>
-#include <events.h>
-#include <lib.h>
-#include <xenbus.h>
+#include <guk/os.h>
+#include <guk/wait.h>
+#include <guk/mm.h>
+#include <guk/hypervisor.h>
+#include <guk/events.h>
+#include <guk/xenbus.h>
+#include <guk/trace.h>
+#include <guk/blk_front.h>
+
 #include <xen/io/console.h>
-#include <trace.h>
 
-#include <blk_front.h>
-
+#include <lib.h>
+#include <types.h>
 
 /* Copies all print output to the Xen emergency console apart
    of standard dom0 handled console */

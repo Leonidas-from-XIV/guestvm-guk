@@ -83,7 +83,11 @@
 
 #include <stdarg.h>
 #include <stddef.h>
-#include <console.h>
+#include <guk/console.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* printing */
 #define _p(_x) ((void *)(unsigned long)(_x))
@@ -95,6 +99,11 @@ int vsprintf(char *buf, const char *fmt, va_list args);
 int sprintf(char * buf, const char *fmt, ...);
 int vsscanf(const char * buf, const char * fmt, va_list args);
 int sscanf(const char * buf, const char * fmt, ...);
+
+/* fake FILE type */
+typedef void *FILE;
+extern FILE *stdout;
+extern FILE *stderr;
 
 long simple_strtol(const char *cp,char **endp,unsigned int base);
 unsigned long simple_strtoul(const char *cp,char **endp,unsigned int base);
@@ -127,6 +136,7 @@ struct kvec {
     size_t iov_len;
 };
 
+#ifndef ASSERT
 #define ASSERT(x)                                              \
 do {                                                           \
 	if (!(x)) {                                                \
@@ -137,8 +147,13 @@ do {                                                           \
         BUG();                                                 \
 	}                                                          \
 } while(0)
+#endif
 
 /* Consistency check as much as possible. */
 void sanity_check(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _LIB_H_ */
