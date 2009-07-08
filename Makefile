@@ -122,7 +122,7 @@ links:	$(ARCH_LINKS)
 arch_lib:
 	$(MAKE) --directory=$(TARGET_ARCH_DIR) || exit 1;
 
-$(TARGET): $(OBJS)
+$(TARGET): $(OBJS) $(TARGET_ARCH_DIR)/lib$(ARCH_LIB_NAME).a
 	$(LD) -r $(LDFLAGS) $(HEAD_OBJ) $(OBJS) $(LDARCHLIB) -o $@.o
 	$(OBJCOPY) -w -G $(GLOBAL_PREFIX)* -G _start -G str* -G mem* -G hypercall_page $@.o $@.o
 	$(LD) $(LDFLAGS) $(LDFLAGS_FINAL) $@.o $(EXTRA_OBJS) -o $@

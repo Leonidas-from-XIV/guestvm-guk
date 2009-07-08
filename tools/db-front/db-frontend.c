@@ -45,7 +45,7 @@
 #include "db-frontend.h"
 
 /* uncomment next line to build a version that traces all activity to a file in /tmp */
-//#define DUMP_TRACE
+#define DUMP_TRACE
 
 #ifdef DUMP_TRACE
 static FILE *trace_file = NULL; 
@@ -300,14 +300,33 @@ int resume(uint16_t thread_id)
     return (int)rsp->ret_val;
 }
 
-int suspend_threads(void) {
+int suspend_all(void) {
     struct dbif_request *req;
     struct dbif_response *rsp;
     RING_IDX idx;
 
     TRACE("suspend_threads");
     req = get_request(&idx);
-    req->type = REQ_SUSPEND_THREADS;
+    req->type = REQ_SUSPEND_ALL;
+    /* Magic number */
+    req->id = 13;
+
+    commit_request(idx);
+    rsp = get_response();
+    assert(rsp->id == 13);
+    TRACE("ret_val: %lx", rsp->ret_val);
+
+    return (int)rsp->ret_val;
+}
+
+int resume_all(void) {
+    struct dbif_request *req;
+    struct dbif_response *rsp;
+    RING_IDX idx;
+
+    TRACE("resume_threads");
+    req = get_request(&idx);
+    req->type = REQ_RESUME_ALL;
     /* Magic number */
     req->id = 13;
 
@@ -367,6 +386,23 @@ struct db_regs* get_regs(uint16_t thread_id)
     regs = (struct db_regs*)malloc(sizeof(struct db_regs));
     db_regs = &rsp->u.regs;
 
+    regs->xmm0 = db_regs->xmm0;
+    regs->xmm1 = db_regs->xmm1;
+    regs->xmm2 = db_regs->xmm2;
+    regs->xmm3 = db_regs->xmm3;
+    regs->xmm4 = db_regs->xmm4;
+    regs->xmm5 = db_regs->xmm5;
+    regs->xmm6 = db_regs->xmm6;
+    regs->xmm7 = db_regs->xmm7;
+    regs->xmm8 = db_regs->xmm8;
+    regs->xmm9 = db_regs->xmm9;
+    regs->xmm10 = db_regs->xmm10;
+    regs->xmm11 = db_regs->xmm11;
+    regs->xmm12 = db_regs->xmm12;
+    regs->xmm13 = db_regs->xmm13;
+    regs->xmm14 = db_regs->xmm14;
+    regs->xmm15 = db_regs->xmm15;
+
     regs->r15 = db_regs->r15;
     regs->r14 = db_regs->r14;
     regs->r13 = db_regs->r13;
@@ -383,6 +419,7 @@ struct db_regs* get_regs(uint16_t thread_id)
     regs->rsi = db_regs->rsi;
     regs->rdi = db_regs->rdi;
     regs->rip = db_regs->rip;
+    regs->flags = db_regs->flags;
     regs->rsp = db_regs->rsp; 
 
     TRACE("Regs: r15=%lx, "
@@ -401,6 +438,7 @@ struct db_regs* get_regs(uint16_t thread_id)
                 "rsi=%lx, "
                 "rdi=%lx, "
                 "rip=%lx, "
+                "flags=%lx, "
                 "rsp=%lx.",
                  db_regs->r15, 
                  db_regs->r14,
@@ -418,7 +456,40 @@ struct db_regs* get_regs(uint16_t thread_id)
                  db_regs->rsi,
                  db_regs->rdi,
                  db_regs->rip,
+                 db_regs->flags,
                  db_regs->rsp);
+    TRACE("FPRegs: xmm0=%lx, "
+	          "xmm1=%lx, "
+	          "xmm2=%lx, "
+	          "xmm3=%lx, "
+	          "xmm4=%lx, "
+	          "xmm5=%lx, "
+	          "xmm6=%lx, "
+	          "xmm7=%lx, "
+	          "xmm8=%lx, "
+	          "xmm9=%lx, "
+	          "xmm10=%lx, "
+	          "xmm11=%lx, "
+	          "xmm12=%lx, "
+	          "xmm13=%lx, "
+	          "xmm14=%lx, "
+	          "xmm15=%lx.",
+                  db_regs->xmm0,
+                  db_regs->xmm1,
+                  db_regs->xmm2,
+                  db_regs->xmm3,
+                  db_regs->xmm4,
+                  db_regs->xmm5,
+                  db_regs->xmm6,
+                  db_regs->xmm7,
+                  db_regs->xmm8,
+                  db_regs->xmm9,
+                  db_regs->xmm10,
+                  db_regs->xmm11,
+                  db_regs->xmm12,
+                  db_regs->xmm13,
+                  db_regs->xmm14,
+                  db_regs->xmm15);
 
     return regs;
 }
@@ -498,6 +569,66 @@ uint64_t app_specific1(uint64_t arg)
     assert(rsp->id == 13);
     TRACE("ret_val: %lx", rsp->ret_val);
 
+    return rsp->ret_val;
+}
+
+int activate_watchpoint(unsigned long address, unsigned long size, int kind) {
+    struct dbif_request *req;
+    struct dbif_response *rsp;
+    RING_IDX idx;
+
+    TRACE("address %lx, size %ld, kind %x", address, size, kind);
+    req = get_request(&idx);
+    req->type = REQ_ACTIVATE_WP;
+    /* Magic number */
+    req->id = 13;
+    req->u.watchpoint_request.address = address;
+    req->u.watchpoint_request.size = size;
+    req->u.watchpoint_request.kind = kind;
+    commit_request(idx);
+    rsp = get_response();
+    assert(rsp->id == 13);
+    TRACE("ret_val: %lx", rsp->ret_val);
+
+    return rsp->ret_val;
+}
+
+int deactivate_watchpoint(unsigned long address, unsigned long size) {
+    struct dbif_request *req;
+    struct dbif_response *rsp;
+    RING_IDX idx;
+
+    TRACE("address %lx, size %ld", address, size);
+    req = get_request(&idx);
+    req->type = REQ_DEACTIVATE_WP;
+    /* Magic number */
+    req->id = 13;
+    req->u.watchpoint_request.address = address;
+    req->u.watchpoint_request.size = size;
+    commit_request(idx);
+    rsp = get_response();
+    assert(rsp->id == 13);
+    TRACE("ret_val: %lx", rsp->ret_val);
+
+    return rsp->ret_val;
+}
+
+unsigned long watchpoint_info(int16_t thread_id, int *kind) {
+    struct dbif_request *req;
+    struct dbif_response *rsp;
+    RING_IDX idx;
+
+    TRACE("watchpoint info");
+    req = get_request(&idx);
+    req->type = REQ_WP_INFO;
+    req->u.watchpoint_info_request.thread_id = thread_id;
+    /* Magic number */
+    req->id = 13;
+    commit_request(idx);
+    rsp = get_response();
+    assert(rsp->id == 13);
+    TRACE("ret_val: %lx, %x", rsp->ret_val, (int)rsp->ret_val2);
+    *kind = (int) rsp->ret_val2;
     return rsp->ret_val;
 }
 

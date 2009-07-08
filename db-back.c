@@ -75,6 +75,17 @@ static char *cmd_line;
 /* page for communicating block data */
 static grant_ref_t data_grant_ref;
 static char *data_page;
+/* list for watchpoints */
+static LIST_HEAD(watchpoints_list);
+static DEFINE_SPINLOCK(watchpoints_list_lock);
+struct db_watchpoint {
+  struct list_head list;
+  unsigned long address;
+  unsigned long page_address;
+  unsigned long size;
+  int kind;
+  unsigned long pfn;
+};
 
 #define DB_EXIT_UNSET 0
 #define DB_EXIT_SET 1
@@ -94,8 +105,8 @@ void guk_set_debugging(int state) {
 /*
  * The one ukernel thread the debugger needs to gather is the primordial maxine thread.
  */
-static int is_maxine_thread(struct thread *thread) {
-    return strcmp(thread->name, "maxine") == 0;
+static int is_app_thread(struct thread *thread) {
+    return !is_ukernel(thread) || strcmp(thread->name, "maxine") == 0;
 }
 
 static struct dbif_response *get_response(void)
@@ -114,7 +125,7 @@ static void dispatch_read_u64(struct dbif_request *req)
     u64 *pointer;
 
     pointer = (u64 *)req->u.read_u64.address;
-    DEBUG(2, "Read request for %p recieved.\n", pointer);
+    DEBUG(2, "Read request for %p recieved.", pointer);
     rsp = get_response();
     rsp->id = req->id;
     rsp->ret_val = *pointer;
@@ -127,7 +138,7 @@ static void dispatch_write_u64(struct dbif_request *req)
 
     pointer = (u64 *)req->u.writebytes.address;
     value = req->u.write_u64.value;
-    DEBUG(2, "Write request for %p recieved, value=%lx, current_value=%lx.\n",
+    DEBUG(2, "Write request for %p recieved, value=%lx, current_value=%lx.",
             pointer, value, *pointer);
     *pointer = value;
     rsp = get_response();
@@ -147,6 +158,14 @@ unsigned long db_back_addr;
 unsigned long db_back_handler[3];
 extern int set_db_back_handler(void * handler_addr);
 
+int db_is_dbaccess_addr(unsigned long addr) {
+  return db_back_access && db_back_addr == addr;
+}
+
+int db_is_dbaccess(void) {
+  return db_back_access;
+}
+
 static void dispatch_readbytes(struct dbif_request *req)
 {
     volatile struct dbif_response *rsp;
@@ -156,8 +175,7 @@ static void dispatch_readbytes(struct dbif_request *req)
 
     pointer = (char *)req->u.readbytes.address;
     n = req->u.readbytes.n;
-    set_db_back_handler(db_back_handler);
-    DEBUG(2, "Readbytes request for %p, %d received.\n", pointer, n);
+    DEBUG(2, "Readbytes request for %p, %d received.", pointer, n);
     rsp = get_response();
     rsp->id = req->id;
     rsp->ret_val = n;
@@ -185,7 +203,7 @@ static void dispatch_writebytes(struct dbif_request *req)
 
     pointer = (char *)req->u.writebytes.address;
     n = req->u.writebytes.n;
-    DEBUG(2, "Writebytes request for %p, %d received\n",
+    DEBUG(2, "Writebytes request for %p, %d received",
             pointer, n);
     rsp = get_response();
     rsp->id = req->id;
@@ -212,12 +230,12 @@ static void dispatch_gather_threads(struct dbif_request *req)
     int numThreads = 0;
     struct db_thread *db_thread = (struct db_thread *)data_page;
 
-    DEBUG(1, "Gather threads request.\n");
+    DEBUG(1, "Gather threads request.");
     /* -1 == max value for uint16_t */
     spin_lock(&thread_list_lock);
     list_for_each(list_head, &thread_list) {
         thread = list_entry(list_head, struct thread, thread_list);
-        if (!is_ukernel(thread) || is_maxine_thread(thread)) {
+        if (is_app_thread(thread)) {
 	    db_thread->id = thread->id;
 	    db_thread->flags = thread->flags;
 	    db_thread->stack = (unsigned long)thread->stack;
@@ -254,7 +272,120 @@ static void clear_all_req_debug_suspend(void) {
     spin_unlock(&thread_list_lock);
 }
 
-static void dispatch_suspend_threads(struct dbif_request *req) {
+static void activate_watchpoints(void);
+static void single_step_thread(struct thread *thread);
+
+static void dispatch_resume_all(struct dbif_request *req) {
+    struct dbif_response *rsp;
+    struct thread *thread, *sthread;
+    struct list_head *list_head;
+
+    DEBUG(1, "Resume_all request.");
+    rsp = get_response();
+    rsp->id = req->id;
+    rsp->ret_val = 0;
+
+    clear_all_req_debug_suspend();
+    /* Deal with any watchpointed thread by single stepping it before
+     * reactivating watchpoints. */
+    /* Can't hold the lock while calling suspend_thread as it may have to sleep */
+    while (1) {
+      sthread = NULL;
+      spin_lock(&thread_list_lock);
+      list_for_each(list_head, &thread_list) {
+	  thread = list_entry(list_head, struct thread, thread_list);
+	  if (is_app_thread(thread) && is_watchpoint(thread)) {
+	    sthread = thread;
+	    break;
+	  }
+      }
+      spin_unlock(&thread_list_lock);
+      if (sthread != NULL) {
+	DEBUG(1, "Stepping watchpoint thread %d.", sthread->id);
+	single_step_thread(sthread);
+	clear_watchpoint(sthread);
+	clear_req_debug_suspend(sthread);
+      } else {
+	break;
+      }
+    }
+    
+    activate_watchpoints();
+    spin_lock(&thread_list_lock);
+    list_for_each(list_head, &thread_list) {
+        thread = list_entry(list_head, struct thread, thread_list);
+	if (is_app_thread(thread)) {
+	  if (is_debug_suspend(thread)) {
+	    DEBUG(1, "Resuming thread %d.", thread->id);
+	    clear_debug_suspend(thread);
+	    db_wake(thread);
+	  }
+	}
+    }
+    spin_unlock(&thread_list_lock);
+}
+
+static void suspend_thread(struct thread *thread) {
+  if (!is_runnable(thread)) {
+    /* Thread is blocked but may become runnable again while the
+       debugger is in control, e.g. due to a sleep expiring.
+       So we make sure that if this happens it will arrange to
+       debug_suspend itself. */
+    if (!is_debug_suspend(thread)) {
+      set_req_debug_suspend(thread);
+      set_need_resched(thread);
+    }
+  } else {
+    set_req_debug_suspend(thread);
+    set_need_resched(thread);
+    /* Busy wait till the thread stops running */
+    while(is_runnable(thread) || is_running(thread)){
+      nanosleep(RELAX_NS);
+    }
+    /* debug_suspend indicates whether we stopped voluntarily */
+
+    if(thread->preempt_count != 1) {
+      printk("Thread's id=%d preempt_count is 0x%lx\n",
+	     thread->id, thread->preempt_count);
+      sleep(100);
+      printk("Thread's id=%d preempt_count is 0x%lx\n",
+	     thread->id, thread->preempt_count);
+      BUG_ON(is_runnable(thread));
+      BUG();
+    }
+  }
+}
+
+static void deactivate_watchpoints(void);
+static void dispatch_suspend_all(struct dbif_request *req) {
+    struct dbif_response *rsp;
+    struct thread *thread, *sthread;
+    struct list_head *list_head;
+
+    DEBUG(1, "Suspend_all request.");
+    rsp = get_response();
+    rsp->id = req->id;
+    rsp->ret_val = 0;
+    /* Can't hold the lock while calling suspend_thread as it may have to sleep */
+    while (1) {
+      sthread = NULL;
+      spin_lock(&thread_list_lock);
+      list_for_each(list_head, &thread_list) {
+	thread = list_entry(list_head, struct thread, thread_list);
+	if (is_app_thread(thread) && !(is_debug_suspend(thread) || is_req_debug_suspend(thread))) {
+	  sthread = thread;
+	  break;
+	}
+      }
+      spin_unlock(&thread_list_lock);
+      if (sthread != NULL) {
+	DEBUG(1, "Suspending thread %d.", sthread->id);
+	suspend_thread(sthread);
+      } else {
+	break;
+      }
+    }
+    deactivate_watchpoints();
 }
 
 static void dispatch_suspend_thread(struct dbif_request *req)
@@ -264,50 +395,47 @@ static void dispatch_suspend_thread(struct dbif_request *req)
     struct thread *thread;
 
     thread_id = req->u.suspend.thread_id;
-    DEBUG(1, "Suspend request for thread_id=%d.\n",
+    DEBUG(1, "Suspend request for thread_id=%d.",
             thread_id);
     thread = get_thread_by_id(thread_id);
     rsp = get_response();
     rsp->id = req->id;
     if(thread == NULL) {
-        DEBUG(1, "Thread of id=%d not found.\n", thread_id);
+        DEBUG(1, "Thread of id=%d not found.", thread_id);
         rsp->ret_val = (uint64_t)-1;
     } else {
-	DEBUG(1, "Thread id=%d found.\n", thread_id);
-	if (!is_runnable(thread)) {
-	    /* Thread is blocked but may become runnable again while the
-	       debugger is in control, e.g. due to a sleep expiring.
-	       So we make sure that if this happens it will arrange to
-	    // debug_suspend itself. */
-	    if (!is_debug_suspend(thread)) {
-		set_req_debug_suspend(thread);
-		set_need_resched(thread);
-	    }
-	} else {
-	    set_req_debug_suspend(thread);
-	    set_need_resched(thread);
-	    /* Busy wait till the thread stops running */
-	    while(is_runnable(thread) || is_running(thread)){
-		nanosleep(RELAX_NS);
-	    }
-	    /* debug_suspend indicates whether we stopped voluntarily */
-
-	    if(thread->preempt_count != 1) {
-		printk("Thread's id=%d preempt_count is 0x%lx\n",
-			thread_id, thread->preempt_count);
-		sleep(100);
-		printk("Thread's id=%d preempt_count is 0x%lx\n",
-			thread_id, thread->preempt_count);
-		BUG_ON(is_runnable(thread));
-		BUG();
-	    }
-	}
+	DEBUG(1, "Thread id=%d found.", thread_id);
+	suspend_thread(thread);
 	rsp->ret_val = 0;
     }
-    DEBUG(1, "Returning from suspend.\n");
+    DEBUG(1, "Returning from suspend.");
 }
 
-static int debugging_count = 0;
+static void single_step_thread(struct thread *thread) {
+  struct pt_regs *regs;
+
+  set_stepped(thread);
+  if(thread->preempt_count != 1)
+    printk("Preempt count = %lx", thread->preempt_count);
+  BUG_ON(thread->preempt_count != 1);
+  regs = (struct pt_regs*)thread->regs;
+  if(regs != NULL) {
+    DEBUG(1, " >> Thread %d found (regs=%lx, regs=%lx).",
+	  thread->id, thread->regs, thread->regs->rip);
+    //BUG_ON(thread->regs->eflags > 0xFFF);
+    thread->regs->eflags |= 0x00000100; /* Trap Flag */
+  }
+
+  /* do_debug trap which happens soon after waking up, will set tmp to 1
+   * */
+  db_wake(thread);
+  while(is_runnable(thread) || is_running(thread)){
+    nanosleep(RELAX_NS);
+  }
+  clear_stepped(thread);
+  /* Here, the thread is not runnable any more, and therefore there will
+   * be no exceptions happening on it */
+}
 
 static void dispatch_single_step_thread(struct dbif_request *req)
 {
@@ -316,47 +444,21 @@ static void dispatch_single_step_thread(struct dbif_request *req)
     struct thread *thread;
 
     thread_id = req->u.step.thread_id;
-    DEBUG(1, "Step request for thread_id=%d.\n",
+    DEBUG(1, "Step request for thread_id=%d.",
             thread_id);
     thread = get_thread_by_id(thread_id);
     rsp = get_response();
     rsp->id = req->id;
     if(thread == NULL) {
-        DEBUG(1, "Thread of id=%d not found.\n", thread_id);
+        DEBUG(1, "Thread of id=%d not found.", thread_id);
         rsp->ret_val = (uint64_t)-1;
     }
     else if(!is_debug_suspend(thread) || is_runnable(thread) || is_running(thread)) {
-	DEBUG(1, "Thread of id=%d not suspended.\n", thread_id);
+	DEBUG(1, "Thread of id=%d not suspended.", thread_id);
 	rsp->ret_val = (uint64_t)-2;
     } else {
-        struct pt_regs *regs;
-
-        if(debugging_count == 0)
-            debugging_count = 15;
-
-        DEBUG(1, "Thread %s found.\n", thread->name);
-        set_stepped(thread);
-        if(thread->preempt_count != 1)
-            printk("Preempt count = %lx\n", thread->preempt_count);
-        BUG_ON(thread->preempt_count != 1);
-        regs = (struct pt_regs*)thread->regs;
-        if(regs != NULL) {
-            DEBUG(1, " >> Thread %s found (regs=%lx, regs=%lx).\n",
-                    thread->name, thread->regs, thread->regs->rip);
-            BUG_ON(thread->regs->eflags > 0xFFF);
-            thread->regs->eflags |= 0x00000100; /* Trap Flag */
-        }
-
-        /* do_debug trap which happens soon after waking up, will set tmp to 1
-         * */
-        db_wake(thread);
-        while(is_runnable(thread) || is_running(thread)){
-	    nanosleep(RELAX_NS);
-	}
-        clear_stepped(thread);
-        /* Here, the thread is not runnable any more, and therefore there will
-         * be no exceptions happening on it */
-
+        DEBUG(1, "Thread %d found.", thread->id);
+	single_step_thread(thread);
         rsp->ret_val = 0;
     }
 }
@@ -368,30 +470,31 @@ static void dispatch_resume_thread(struct dbif_request *req)
     struct thread *thread;
 
     thread_id = req->u.resume.thread_id;
-    DEBUG(1, "Resume request for thread_id=%d.\n",
+    DEBUG(1, "Resume request for thread_id=%d.",
             thread_id);
     clear_all_req_debug_suspend();
     thread = get_thread_by_id(thread_id);
     rsp = get_response();
     rsp->id = req->id;
     if(thread == NULL) {
-        DEBUG(1, "Thread of id=%d not found.\n", thread_id);
+        DEBUG(1, "Thread of id=%d not found.", thread_id);
         rsp->ret_val = (uint64_t)-1;
     }
 
     if(!is_debug_suspend(thread) || is_runnable(thread) || is_running(thread)) {
         DEBUG(1, "Thread of id=%d not suspended (is_debug_suspended=%lx,"
 			                        "is_runnable=%lx,"
-                                                "is_running=%lx).\n",
+                                                "is_running=%lx).",
 			thread_id,
 			is_debug_suspend(thread),
 			is_runnable(thread),
 			is_running(thread));
         rsp->ret_val = (uint64_t)-2;
     } else {
-        DEBUG(1, "Thread %s found (runnable=%d, stepped=%d).\n",
+        DEBUG(1, "Thread %s found (runnable=%d, stepped=%d).",
                 thread->name, is_runnable(thread), is_stepped(thread));
         clear_debug_suspend(thread);
+	
         db_wake(thread);
         rsp->ret_val = 0;
     }
@@ -405,25 +508,25 @@ static void dispatch_get_regs(struct dbif_request *req)
     struct db_regs *regs;
 
     thread_id = req->u.get_regs.thread_id;
-    DEBUG(1, "Get regs request for thread_id=%d.\n",
+    DEBUG(1, "Get regs request for thread_id=%d.",
             thread_id);
     thread = get_thread_by_id(thread_id);
     rsp = get_response();
     rsp->id = req->id;
     if(thread == NULL)
     {
-        DEBUG(1, "Thread of id=%d not found.\n", thread_id);
+        DEBUG(1, "Thread of id=%d not found.", thread_id);
         rsp->ret_val = (uint64_t)-1;
     }
     else
     if(is_runnable(thread) || is_running(thread))
     {
-        DEBUG(1, "Thread of id=%d is not blocked.\n", thread_id);
+        DEBUG(1, "Thread of id=%d is not blocked.", thread_id);
         rsp->ret_val = (uint64_t)-2;
     }
     else
     {
-        DEBUG(1, "Thread %s found.\n", thread->name);
+        DEBUG(1, "Thread id=%d found, regs=%lx.", thread_id, thread->regs);
         rsp->ret_val = 0;
         regs = &rsp->u.regs;
         if(thread->regs == NULL)
@@ -434,6 +537,23 @@ static void dispatch_get_regs(struct dbif_request *req)
         }
         else
         {
+	    regs->xmm0 = thread->fpregs->xmm0;
+	    regs->xmm1 = thread->fpregs->xmm1;
+	    regs->xmm2 = thread->fpregs->xmm2;
+  	    regs->xmm3 = thread->fpregs->xmm3;
+            regs->xmm4 = thread->fpregs->xmm4;
+	    regs->xmm5 = thread->fpregs->xmm5;
+	    regs->xmm6 = thread->fpregs->xmm6;
+	    regs->xmm7 = thread->fpregs->xmm7;
+	    regs->xmm8 = thread->fpregs->xmm8;
+	    regs->xmm9 = thread->fpregs->xmm9;
+	    regs->xmm10 = thread->fpregs->xmm10;
+	    regs->xmm11 = thread->fpregs->xmm11;
+	    regs->xmm12 = thread->fpregs->xmm12;
+	    regs->xmm13 = thread->fpregs->xmm13;
+	    regs->xmm14 = thread->fpregs->xmm14;
+	    regs->xmm15 = thread->fpregs->xmm15;
+
             regs->r15 = thread->regs->r15;
             regs->r14 = thread->regs->r14;
             regs->r13 = thread->regs->r13;
@@ -450,6 +570,7 @@ static void dispatch_get_regs(struct dbif_request *req)
             regs->rsi = thread->regs->rsi;
             regs->rdi = thread->regs->rdi;
             regs->rip = thread->regs->rip;
+            regs->flags = thread->regs->eflags;
             regs->rsp = thread->regs->rsp;
         }
     }
@@ -462,31 +583,31 @@ static void dispatch_set_ip(struct dbif_request *req)
     struct thread *thread;
 
     thread_id = req->u.set_ip.thread_id;
-    DEBUG(1, "Set ip request for thread_id=%d.\n",
+    DEBUG(1, "Set ip request for thread_id=%d.",
             thread_id);
     thread = get_thread_by_id(thread_id);
     rsp = get_response();
     rsp->id = req->id;
     if(thread == NULL)
     {
-        DEBUG(1, "Thread of id=%d not found.\n", thread_id);
+        DEBUG(1, "Thread of id=%d not found.", thread_id);
         rsp->ret_val = (uint64_t)-1;
     }
     else
     if(is_runnable(thread) || is_running(thread))
     {
-        DEBUG(1, "Thread of id=%d is not blocked.\n", thread_id);
+        DEBUG(1, "Thread of id=%d is not blocked.", thread_id);
         rsp->ret_val = (uint64_t)-2;
     }
     else
     if(thread->regs == NULL)
     {
-        DEBUG(1, "Regs not available for thread of id=%d .\n", thread_id);
+        DEBUG(1, "Regs not available for thread of id=%d .", thread_id);
         rsp->ret_val = (uint64_t)-3;
     }
     else
     {
-        DEBUG(1, "Thread %s found.\n", thread->name);
+        DEBUG(1, "Thread %s found.", thread->name);
         rsp->ret_val = 0;
         //printk("Updated RIP from %lx, to %lx\n", thread->regs->rip, req->u.set_ip.ip);
         thread->regs->rip = req->u.set_ip.ip;
@@ -503,7 +624,7 @@ static void dispatch_get_thread_stack(struct dbif_request *req)
     rsp->id = req->id;
     if(thread != NULL)
     {
-	DEBUG(1, "Get stack request, thread %s.\n", thread->name);
+	DEBUG(1, "Get stack request, thread %s.", thread->name);
         rsp->ret_val = (uint64_t)thread->stack;
         rsp->ret_val2 = thread->stack_size;
     } else
@@ -524,7 +645,7 @@ static void dispatch_app_specific1(struct dbif_request *req)
 {
     struct dbif_response *rsp;
 
-    DEBUG(1, "App specific1 request received.\n");
+    DEBUG(1, "App specific1 request received.");
     rsp = get_response();
     guk_dispatch_app_specific1_request(req, rsp);
     rsp->id = req->id;
@@ -545,12 +666,187 @@ static void dispatch_db_signoff(struct dbif_request *req) {
   db_exit = DB_EXIT_FIN;
 }
 
+/* Returns a db_watchpoint if address is a watchpoint address OR
+ * is on a watchpointed page.
+ */
+static struct db_watchpoint *get_watchpoint(unsigned long address) {
+    struct list_head *list_head;
+    struct db_watchpoint *wp;
+    struct db_watchpoint *result = NULL;
+    unsigned long page_address = round_pgdown(address);
+    spin_lock(&watchpoints_list_lock);
+    list_for_each(list_head, &watchpoints_list) {
+        wp = list_entry(list_head, struct db_watchpoint, list);
+        if(wp->address == address) {
+	  result = wp;
+	  break;
+	} else if (wp->page_address == page_address) {
+	  result = wp;
+	  /* but keep looking for an exact match */
+        }
+    }
+    spin_unlock(&watchpoints_list_lock);
+    return result;
+}
+
+
+static void activate_watchpoint(struct db_watchpoint *wp) {
+    guk_unmap_page_pfn(wp->page_address, wp->pfn);
+    DEBUG(2, "unmapped page at %lx\n", wp->page_address);
+}
+
+static void deactivate_watchpoint(struct db_watchpoint *wp) {
+    guk_remap_page_pfn(wp->page_address, wp->pfn);
+    DEBUG(2, "remapped page at %lx\n", wp->page_address);
+}
+
+int db_is_watchpoint(unsigned long address) {
+  struct thread *thread = current;
+  struct db_watchpoint *wp = get_watchpoint(address);
+  if (wp == NULL) return 0;
+  /* So either the current thread hit a watchpoint or it hit a watchpointed page. */
+  if (wp->address == address) {
+    /* match, suspend thread */
+    struct fp_regs *fpregs = thread->fpregs;
+    asm (save_fp_regs_asm : : [fpr] "r" (fpregs));
+    DEBUG(2, "watch point: %lx\n", address);
+    BUG_ON(!is_preemptible(thread));
+    thread->flags |= WATCH_FLAG;
+    thread->db_data = wp;
+    set_req_debug_suspend(thread);
+    set_need_resched(thread);
+  } else {
+    /* Some other access to watchpointed page.
+       In an SMP context we really should suspend all threads before
+       unprotecting the page as otherwise there is a tiny window where
+       a watchpoint on this page in a thread on another CPU could be missed.
+       But we can't do that from here and it's a lot of work.
+     */
+    deactivate_watchpoint(wp);
+    per_cpu(smp_processor_id(), db_support) = wp;
+    thread->regs->eflags |= 0x00000100; /* Trap Flag */
+  }
+  return 1;
+}
+
+/* This is called from the trap[ handler after db_is_watchpoint returns from an access
+   to a watchpointed page. We need to protect the page again and continue.
+ */
+int db_watchpoint_step(void) {
+   struct thread *thread = current;
+   struct db_watchpoint *wp =  (struct db_watchpoint *) per_cpu(smp_processor_id(), db_support);
+   if (wp == NULL) return 0;
+   activate_watchpoint(wp);
+   thread->regs->eflags &= ~0x00000100;
+   per_cpu(smp_processor_id(), db_support) = NULL;
+   return 1;
+}
+
+
+static void validate_watchpoint(unsigned long address) {
+  unsigned long data;
+  DEBUG(2, "validate_watchpoint %lx\n", address);
+  db_back_access = 1;
+  db_back_addr = address;
+  if (set_db_back_handler(db_back_handler) == 0) {
+    data = *(unsigned long *)address;
+    DEBUG(2, "validation failed - read watchpoint word\n");
+  } else {
+    DEBUG(2, "validation ok\n");
+  }
+  db_back_access = 0;
+}
+
+USED static void activate_watchpoints(void) {
+    struct list_head *list_head;
+    struct db_watchpoint *wp;
+    spin_lock(&watchpoints_list_lock);
+    list_for_each(list_head, &watchpoints_list) {
+      wp = list_entry(list_head, struct db_watchpoint, list);
+      activate_watchpoint(wp);
+    }
+    spin_unlock(&watchpoints_list_lock);
+}
+
+USED static void deactivate_watchpoints(void) {
+    struct list_head *list_head;
+    struct db_watchpoint *wp;
+    spin_lock(&watchpoints_list_lock);
+    list_for_each(list_head, &watchpoints_list) {
+      wp = list_entry(list_head, struct db_watchpoint, list);
+      deactivate_watchpoint(wp);
+    }
+    spin_unlock(&watchpoints_list_lock);
+}
+
+static void dispatch_db_activate_watchpoint(struct dbif_request *req) {
+    struct db_watchpoint *wp;
+    struct dbif_response *rsp;
+    unsigned long pte;
+    rsp = get_response();
+    rsp->id = req->id;
+
+    wp = xmalloc(struct db_watchpoint);
+    wp->address = req->u.watchpoint_request.address;
+    wp->size = req->u.watchpoint_request.size;
+    wp->kind = req->u.watchpoint_request.kind;
+    spin_lock(&watchpoints_list_lock);
+    list_add_tail(&wp->list, &watchpoints_list);
+    spin_unlock(&watchpoints_list_lock);
+    wp->pfn = guk_not11_virt_to_pfn(wp->address, &pte);
+    wp->page_address = round_pgdown(wp->address);
+    activate_watchpoint(wp);
+    if (db_debug_level >= 2) {
+      validate_watchpoint(wp->address);
+    }
+    rsp->ret_val = 1;
+}
+
+static void dispatch_db_deactivate_watchpoint(struct dbif_request *req) {
+    struct db_watchpoint *wp, *wpp;
+    struct dbif_response *rsp;
+    rsp = get_response();
+    rsp->id = req->id;
+
+    wp = get_watchpoint(req->u.watchpoint_request.address);
+    if (wp != NULL && wp->address == req->u.watchpoint_request.address) {
+      /* remove */
+      spin_lock(&watchpoints_list_lock);
+      list_del(&wp->list);
+      spin_unlock(&watchpoints_list_lock);
+      /* any other watchpoints on this page? */
+      wpp = get_watchpoint(req->u.watchpoint_request.address);
+      if (wpp == NULL) {
+	deactivate_watchpoint(wp);
+      }
+      rsp->ret_val = 1;
+    } else {
+      rsp->ret_val = 0;
+    }
+}
+
+static void dispatch_db_watchpoint_info(struct dbif_request *req) {
+    struct db_watchpoint *wp;
+    struct dbif_response *rsp;
+    struct thread *thread;
+    rsp = get_response();
+    rsp->id = req->id;
+    thread = get_thread_by_id(req->u.get_stack.thread_id);
+    if (thread == NULL || !is_watchpoint(thread)) {
+      rsp->ret_val = -1;
+    } else {
+      wp = (struct db_watchpoint*) thread->db_data;
+      rsp->ret_val = wp->address;
+      rsp->ret_val2 = wp->kind;
+    }
+}
+
 static void ring_thread(void *unused)
 {
     int more, notify;
     struct thread *this_thread;
 
-    DEBUG(3, "Ring thread.\n");
+    DEBUG(3, "Ring thread.");
     this_thread = current;
     db_in_use = 1;
 
@@ -566,9 +862,9 @@ moretodo:
 
         while ((cons = ring.req_cons) != rp)
         {
-            DEBUG(3, "Got a request at %d\n", cons);
+            DEBUG(3, "Got a request at %d", cons);
             req = RING_GET_REQUEST(&ring, cons);
-            DEBUG(3, "Request type=%d\n", req->type);
+            DEBUG(3, "Request type=%d", req->type);
             switch(req->type)
             {
                 case REQ_READ_U64:
@@ -589,11 +885,14 @@ moretodo:
                 case REQ_SUSPEND_THREAD:
                     dispatch_suspend_thread(req);
                     break;
-                case REQ_SUSPEND_THREADS:
-                    dispatch_suspend_threads(req);
-                    break;
                 case REQ_RESUME_THREAD:
                     dispatch_resume_thread(req);
+                    break;
+                case REQ_SUSPEND_ALL:
+                    dispatch_suspend_all(req);
+                    break;
+                case REQ_RESUME_ALL:
+                    dispatch_resume_all(req);
                     break;
                 case REQ_SINGLE_STEP_THREAD:
                     dispatch_single_step_thread(req);
@@ -616,6 +915,15 @@ moretodo:
 	        case REQ_SIGNOFF:
 	   	    dispatch_db_signoff(req);
 		    break;
+	        case REQ_ACTIVATE_WP:
+		    dispatch_db_activate_watchpoint(req);
+		    break;
+	        case REQ_DEACTIVATE_WP:
+	   	    dispatch_db_deactivate_watchpoint(req);
+		    break;
+	        case REQ_WP_INFO:
+	   	    dispatch_db_watchpoint_info(req);
+		    break;
                 default:
                     BUG();
             }
@@ -623,13 +931,13 @@ moretodo:
             nr_consumed++;
         }
 
-        DEBUG(3, "Backend consumed: %d requests\n", nr_consumed);
+        DEBUG(3, "Backend consumed: %d requests", nr_consumed);
         RING_PUSH_RESPONSES_AND_CHECK_NOTIFY(&ring, notify);
-        DEBUG(3, "Rsp producer=%d\n", ring.sring->rsp_prod);
-        DEBUG(3, "Pushed responces and notify=%d\n", notify);
+        DEBUG(3, "Rsp producer=%d", ring.sring->rsp_prod);
+        DEBUG(3, "Pushed responces and notify=%d", notify);
         if(notify)
             notify_remote_via_evtchn(port);
-        DEBUG(3, "Done notifying.\n");
+        DEBUG(3, "Done notifying.");
 
         preempt_disable();
         block(this_thread);
@@ -650,7 +958,7 @@ static void db_evt_handler(evtchn_port_t port, void *data)
 {
     struct thread *thread = (struct thread *)data;
 
-    DEBUG(3, "DB evtchn handler.\n");
+    DEBUG(3, "DB evtchn handler.");
     db_wake(thread);
     /* TODO - it would be good to resched here */
 }
@@ -721,117 +1029,6 @@ static domid_t get_self_id(void)
     return ret;
 }
 
-/*****************************************************************************/
-/* DEBUGGING INTERFACE DEBUGGING, IN USE ONLY IF THE
- * "test_debugging_interface" THREAD IS CREATED IN THE INIT FUNCTION.        */
-/*****************************************************************************/
-
-USED static void stepping_thread(void *unused)
-{
-    struct thread *thread = (struct thread *)unused;
-    struct pt_regs *regs;
-    int i;
-    int last_count;
-
-    i = 0;
-
-    sleep(500);
-    printk(" >>>>> Recieved a request to step %s\n", thread->name);
-    set_debug_suspend(thread);
-    set_need_resched(thread);
-    while(is_runnable(thread)) {
-	nanosleep(RELAX_NS);
-    };
-    sleep(10);
-
-    last_count = debugging_count = 5;
-
-next_step:
-    if(debugging_count != last_count)
-    {
-        printk(" >>>> Count changed to: %d\n", debugging_count);
-        last_count = debugging_count;
-    }
-    set_stepped(thread);
-
-    /* Threads scheduled for single stepping need to be preempted in a very well
-     * known location (either: preempt_schedule() or preempt_schedule_irq()), in
-     * both cases the threads will enter the above functions with preemption
-     * enabled (preempt_count == 0), the preempt_count will be then incremented
-     * (by 1) in schedule(). */
-    BUG_ON(thread->preempt_count != 1);
-    /* Since the thread is preemtible, we can safely set the debug trap flag.
-     * If we have trap registers, we set the flag there (this will allow the
-     * thread to be scheduled back in uninterrupted, and cause the trap once it
-     * executes _real_ next instruction, not just an instruction from schedule).
-     * If, however, we don't have the regs, it means that the thread executed
-     * schedule() directly (i.e. either by direct call to schedule, or as the
-     * part of preemption mechanism). In such case, we don't have an option
-     * other than setting the trap flag on the top of the stack (it is popf-ed
-     * as soon as the thread is scheduled back in). */
-    regs = (struct pt_regs*)thread->regs;
-    if(regs != NULL)
-    {
-        /* Bug if the flags are out of range (bugs to do with saving registers
-         * were common) */
-        BUG_ON(thread->regs->eflags > 0xFFF);
-        thread->regs->eflags |= 0x00000100; /* Trap Flag */
-    }
-
-    /* Let the thread execute a single step (or a single preemption disabled
-     * block) */
-    db_wake(thread);
-    while(is_runnable(thread) || is_running(thread)) {
-	nanosleep(RELAX_NS);
-    }
-    clear_stepped(thread);
-
-    /* Print a message every 100 steps */
-    if(i%100 == 0) printk("%d steps executed (IP=%lx).\n", i, thread->regs->rip);
-    i++;
-    goto next_step;
-}
-
-
-/* This thread runs a tight loop. It prints out a message every 10M loops. If
- * the thread is suspended and single stepped it will print out a message every
- * loop. Additionally the thread executes NOW() and schedule() to test if
- * preempt_disable/_enable works fine. */
-USED static void test_debugging_interface(void *unused)
-{
-    int i;
-    s_time_t time;
-
-    i=0;
-    /* Create this thread if you want to test single stepping internally
-     * (without the frontend) */
-    //create_thread("stepping-thread", stepping_thread, XENOS_FLAG, current);
-    printk("About to start the debugging test loop.\n");
-loop_again:
-    time = NOW();
-    if(debugging_count > 1)
-    {
-        debugging_count--;
-        printk("Decremented the debugging_count to %d\n", debugging_count);
-    }
-    if(i%10000000 == 0)
-        printk("I=%d\n", i);
-    if(debugging_count == 1)
-    {
-        printk("Stepped thead: About to schedule.\n");
-        schedule();
-        debugging_count = 5;
-    }
-    i++;
-    goto loop_again;
-    printk("Executed the stepping thread\n");
-}
-
-/*****************************************************************************/
-/* END OF DEBUGGING INTERFACE DEBUGGING */
-/*****************************************************************************/
-
-
 void init_db_backend(char *cmdl)
 {
     xenbus_transaction_t xbt;
@@ -879,7 +1076,6 @@ done:
     printk("Initialising debugging backend complete (This domain id=%d)\n",
             get_self_id());
 
-    //create_thread("debugging-interface-test", test_debugging_interface, XENOS_FLAG, NULL);
     watch_rsp = xenbus_watch_path(XBT_NIL, "device/db/requests", "db-back");
     if(watch_rsp)
 	free(watch_rsp);

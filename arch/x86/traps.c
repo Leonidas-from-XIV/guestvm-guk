@@ -196,33 +196,32 @@ DO_ERROR(18, "machine check", machine_check)
 #define read_cr2() \
         (HYPERVISOR_shared_info->vcpu_info[smp_processor_id()].arch.cr2)
 
-extern int db_back_access;
-extern unsigned long db_back_addr;
-extern unsigned long db_back_handler[2];
-extern void jmp_db_back_handler(void* handler_addr);
-
 int hack_trap = 0;
 void do_page_fault(struct pt_regs *regs, unsigned long error_code)
 {
     unsigned long addr = read_cr2();
-    /* If db-back initiated this access, we want to report failure and recover */
-    if (guk_debugging() && db_back_access && db_back_addr == addr) {
-        jmp_db_back_handler(db_back_handler);
-    } else {
-        if (hack_trap || trace_traps()) {
-	  tprintk("PF @ %p\n", addr); dump_regs_and_stack(regs, tprintk);
-	}
-	fault_handler_t f = check_page_fault(regs, error_code);
-	trapped = 1;
-	(*f)(GENERAL_PROTECTION_FAULT, addr, regs);
-	trapped = 0;
+    if (hack_trap || trace_traps()) {
+      tprintk("PF @ %p\n", addr); dump_regs_and_stack(regs, tprintk);
     }
+    if (guk_debugging()) {
+      /* If db-back initiated this access, we want to report failure and recover */
+      if (db_is_dbaccess_addr(addr)) {
+        jmp_db_back_handler(db_back_handler);
+      } else if (db_is_watchpoint(addr)) {
+	return;
+      }
+    }
+    /* A real trap of some kind */
+    fault_handler_t f = check_page_fault(regs, error_code);
+    trapped = 1;
+    (*f)(GENERAL_PROTECTION_FAULT, addr, regs);
+    trapped = 0;
 }
 
 void do_general_protection(struct pt_regs *regs, long error_code)
 {
     /* If db-back initiated this access, we want to report failure and recover */
-    if (guk_debugging() && db_back_access /*&& db_back_addr == addr*/) {
+    if (guk_debugging() && db_is_dbaccess()) {
         jmp_db_back_handler(db_back_handler);
     } else {
       if (trace_traps()) {
@@ -266,11 +265,11 @@ void do_spurious_interrupt_bug(struct pt_regs * regs)
 
 void do_int3(struct pt_regs *regs)
 {
-    struct thread *thread;
-
-    thread = current;
+    struct thread *thread = current;
+    struct fp_regs *fpregs = thread->fpregs;
+    asm (save_fp_regs_asm : : [fpr] "r" (fpregs));
     if (trace_traps()) {
-      tprintk("INT3 trap executed for thread %s, %d, %x.\n", thread->name, thread->id, thread->flags);
+      tprintk("INT3 trap executed for thread %d, regs %lx, flags %x.\n", thread->id, thread->regs, thread->flags);
     }
     BUG_ON(!is_preemptible(thread));
     set_req_debug_suspend(thread);
@@ -279,12 +278,15 @@ void do_int3(struct pt_regs *regs)
 
 void do_debug(struct pt_regs *regs)
 {
-    struct thread *thread;
-
-    thread = current;
+    struct thread *thread = current;
+    struct fp_regs *fpregs = thread->fpregs;
+    if (guk_debugging() && db_watchpoint_step()) {
+      return;
+    }
+    asm (save_fp_regs_asm : : [fpr] "r" (fpregs));
     /* Bug if regs aren't saved properly */
     BUG_ON(thread->regs != regs);
-    BUG_ON(thread->regs->eflags > 0xFFF);
+    //BUG_ON(thread->regs->eflags > 0xFFF);
 
     /* Stepping controler should have set the stepped flag for this thread, make
      * sure that's the case */
@@ -299,7 +301,7 @@ void do_debug(struct pt_regs *regs)
 }
 
 /*
- * Submit a virtual IDT to teh hypervisor. This consists of tuples
+ * Submit a virtual IDT to the hypervisor. This consists of tuples
  * (interrupt vector, privilege ring, CS:EIP of handler).
  * The 'privilege ring' field specifies the least-privileged ring that
  * can trap to that vector using a software-interrupt instruction (INT).

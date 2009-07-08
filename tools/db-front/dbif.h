@@ -56,7 +56,11 @@
 #define REQ_WRITEBYTES              12
 #define REQ_DB_DEBUG                13
 #define REQ_SIGNOFF                 14
-#define REQ_SUSPEND_THREADS         15
+#define REQ_SUSPEND_ALL             15
+#define REQ_RESUME_ALL              16
+#define REQ_ACTIVATE_WP             17
+#define REQ_DEACTIVATE_WP           18
+#define REQ_WP_INFO                 19
 
 struct dbif_read_u64_request {
     unsigned long address;
@@ -116,9 +120,18 @@ struct dbif_db_debug_request {
 struct dbif_db_signoff_request {
 };
 
-struct dbif_suspend_threads {
+struct dbif_suspend_resume_threads {
 };
 
+struct dbif_watchpoint_request {
+    unsigned long address;
+    unsigned long size;
+    int kind;
+};
+
+struct dbif_watchpoint_info_request {
+    uint16_t thread_id;
+};
 
 /* DB request */
 struct dbif_request {
@@ -139,7 +152,9 @@ struct dbif_request {
         struct dbif_app_specific_request  app_specific;
         struct dbif_db_debug_request      db_debug;
         struct dbif_db_signoff_request    db_signoff;
-        struct dbif_suspend_threads       suspend_threads;
+        struct dbif_suspend_resume_threads suspend_resume_threads;
+	struct dbif_watchpoint_request    watchpoint_request;
+	struct dbif_watchpoint_info_request    watchpoint_info_request;
     } u;
 };
 
@@ -151,7 +166,24 @@ struct db_thread {
     unsigned long stack;
     unsigned long stack_size;
 };
+
 struct db_regs {
+        unsigned long xmm0;
+        unsigned long xmm1;
+        unsigned long xmm2;
+        unsigned long xmm3;
+        unsigned long xmm4;
+        unsigned long xmm5;
+        unsigned long xmm6;
+        unsigned long xmm7;
+        unsigned long xmm8;
+        unsigned long xmm9;
+        unsigned long xmm10;
+        unsigned long xmm11;
+        unsigned long xmm12;
+        unsigned long xmm13;
+        unsigned long xmm14;
+        unsigned long xmm15;
 	unsigned long r15;
 	unsigned long r14;
 	unsigned long r13;
@@ -168,6 +200,7 @@ struct db_regs {
 	unsigned long rsi;
 	unsigned long rdi;
 	unsigned long rip;
+        unsigned long flags;
 	unsigned long rsp; 
 };
 
