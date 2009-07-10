@@ -126,10 +126,19 @@ void guk_dump_sp(unsigned long *sp, printk_function_ptr printk_function) {
 
 static void do_trap(int trapnr, char *str, struct pt_regs * regs, unsigned long error_code)
 {
-    xprintk("FATAL:  Unhandled Trap %d (%s), error code=0x%lx\n", trapnr, str, error_code);
-    xprintk("Regs address %p\n", regs);
-    dump_regs_and_stack(regs, xprintk);
-    crash_exit();
+    struct thread *thread = current;
+    if (thread && guk_debugging()) {
+      struct fp_regs *fpregs = thread->fpregs;
+      asm (save_fp_regs_asm : : [fpr] "r" (fpregs));
+      BUG_ON(!is_preemptible(thread));
+      set_req_debug_suspend(thread);
+      set_need_resched(thread);
+    } else {
+      xprintk("FATAL:  Unhandled Trap %d (%s), error code=0x%lx\n", trapnr, str, error_code);
+      xprintk("Regs address %p\n", regs);
+      dump_regs_and_stack(regs, xprintk);
+      crash_exit();
+    }
 }
 
 #define DO_ERROR(trapnr, str, name) \
