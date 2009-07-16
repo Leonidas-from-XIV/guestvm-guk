@@ -58,7 +58,10 @@
 #include <errno.h>
 
 #define MAX_PATH      64
-#define MAX_DEVICES    1
+
+#ifndef MAX_DEVICES
+#define MAX_DEVICES    8 /* default number of devices */
+#endif
 
 #define DEVICE_STRING "device/vbd"
 
@@ -84,8 +87,9 @@ struct blk_dev {
 	int ring_ref;
 	int16_t blk_id;
 	int16_t state;
-	unsigned int evtchn;
+	evtchn_port_t evtchn;
 	unsigned int local_port;
+	char *backend;
 	struct blkif_front_ring ring;
 	struct device_info device;
 	spinlock_t lock;
@@ -98,10 +102,7 @@ struct blk_dev {
 
 static struct blk_dev blk_devices[MAX_DEVICES];
 
-#define blk_info  blk_devices[0]
-#define device_info (&blk_info.device)
 #define BLK_RING_SIZE  __RING_SIZE((struct blkif_sring *)0, PAGE_SIZE)
-static char *backend;
 
 /*
  *  buffer to read and write from the device
@@ -149,6 +150,7 @@ static void init_buffers(void)
 	add_id_freelist(i);
     }
 }
+/* end of shadow buffer handling */
 
 static inline void complete_request(struct blk_shadow *shadow)
 {
@@ -159,20 +161,19 @@ static inline void complete_request(struct blk_shadow *shadow)
 }
 
 
-static void blk_front_handler(evtchn_port_t port, void *data)
+static void blk_front_handler(evtchn_port_t port, struct blk_dev *dev)
 {
     struct blk_request *io_req;
     struct blk_shadow *shadow;
     struct blkif_response *response;
     RING_IDX cons, prod;
-
 again:
     /* pull all responses from the ring */
-    prod = blk_info.ring.sring->rsp_prod;
+    prod = dev->ring.sring->rsp_prod;
     rmb(); /* read barrier */
 
-    for(cons = blk_info.ring.rsp_cons; cons != prod; cons++) {
-	response = RING_GET_RESPONSE(&blk_info.ring, cons);
+    for(cons = dev->ring.rsp_cons; cons != prod; cons++) {
+	response = RING_GET_RESPONSE(&dev->ring, cons);
 
 	/* find the request to this response and remove grant table entries */
 	shadow = &shadows[response->id];
@@ -195,27 +196,28 @@ again:
     }
 
     /* increase ring counter */
-    blk_info.ring.rsp_cons = cons;
+    dev->ring.rsp_cons = cons;
 
-    if (cons != blk_info.ring.req_prod_pvt) {
+    if (cons != dev->ring.req_prod_pvt) {
 	int more_to_do;
-	RING_FINAL_CHECK_FOR_RESPONSES(&blk_info.ring, more_to_do);
+	RING_FINAL_CHECK_FOR_RESPONSES(&dev->ring, more_to_do);
 	if (more_to_do)
 	    goto again;
     } else
-	blk_info.ring.sring->rsp_event = cons + 1;
+	dev->ring.sring->rsp_event = cons + 1;
 }
 
 static void __blk_front_handler(evtchn_port_t port, void *data)
 {
-    spin_lock(&blk_info.lock);
-    if (blk_info.state == ST_READY)
-	blk_front_handler(port, data);
-    spin_unlock(&blk_info.lock);
+    struct blk_dev *dev = (struct blk_dev *)data;
+    spin_lock(&dev->lock);
+    if (dev->state == ST_READY)
+	blk_front_handler(port, dev);
+    spin_unlock(&dev->lock);
 }
 
 
-static int blk_init_ring(struct blkif_sring *ring)
+static int blk_init_ring(struct blkif_sring *ring, struct blk_dev *dev)
 {
 
     if (ring == NULL)
@@ -228,13 +230,13 @@ static int blk_init_ring(struct blkif_sring *ring)
     memset(ring, 0, PAGE_SIZE);
 
     SHARED_RING_INIT(ring);
-    FRONT_RING_INIT(&blk_info.ring, ring, PAGE_SIZE);
+    FRONT_RING_INIT(&dev->ring, ring, PAGE_SIZE);
 
-    blk_info.ring_ref = gnttab_grant_access(0, virt_to_mfn(ring), 0);
+    dev->ring_ref = gnttab_grant_access(0, virt_to_mfn(ring), 0);
     return 0;
 }
 
-static int blk_get_evtchn(void)
+static int blk_get_evtchn(struct blk_dev *dev)
 {
     evtchn_alloc_unbound_t op;
     op.dom = DOMID_SELF;
@@ -245,43 +247,35 @@ static int blk_get_evtchn(void)
     }
     clear_evtchn(op.port);
 
-    blk_info.local_port = bind_evtchn(op.port, ANY_CPU, __blk_front_handler, NULL);
-    blk_info.evtchn = op.port;
+    dev->local_port = bind_evtchn(op.port, ANY_CPU, __blk_front_handler, dev);
+    dev->evtchn = op.port;
 
     return 0;
 }
 
-void blk_rebind_evtchn(int cpu)
+void blk_rebind_evtchn(int cpu, struct blk_dev *dev)
 {
-    evtchn_bind_to_cpu(blk_info.evtchn, cpu);
+    evtchn_bind_to_cpu(dev->evtchn, cpu);
 }
 
-static char *blk_explore(void)
+static int blk_explore(char ***dirs)
 {
-    char *first;
     char *msg;
-    char **dirs;
     int i;
 
-    msg = xenbus_ls(XBT_NIL, DEVICE_STRING, &dirs);
-	if (msg) {
-		free(msg);
-		return NULL;
-	}
-
-    for (i=0; dirs[i]; i++) {
-	if(i>0)
-	    free(dirs[i]);
+    msg = xenbus_ls(XBT_NIL, DEVICE_STRING, dirs);
+    if (msg) {
+	free(msg);
+	*dirs = NULL;
+	return -1;
     }
-    if (i==0)
-	return NULL;
 
-    first = dirs[0];
-    free(dirs);
-    return first;
+    for (i=0; (*dirs)[i]; i++); /* count the connected devices */
+
+    return i;
 }
 
-static int blk_inform_back(char *path)
+static int blk_inform_back(char *path, struct blk_dev *dev)
 {
     int retry = 0;
     char *err;
@@ -295,13 +289,13 @@ again:
 	return EAGAIN;
     }
 
-    err = xenbus_printf(xbt, path, "ring-ref", "%u", blk_info.ring_ref);
+    err = xenbus_printf(xbt, path, "ring-ref", "%u", dev->ring_ref);
     if (err) {
 	printk("%s ERROR: printf ring ref\n", __FUNCTION__);
 	goto abort;
     }
 
-    err = xenbus_printf(xbt, path, "event-channel", "%u", blk_info.evtchn);
+    err = xenbus_printf(xbt, path, "event-channel", "%u", dev->evtchn);
     if (err) {
 	printk("%s ERROR: printf path\n", __FUNCTION__);
 	goto abort;
@@ -388,6 +382,7 @@ int guk_blk_get_sectors(int device)
     return blk_devices[device].device.sectors;
 }
 
+/* returns with device lock held */
 static inline long wait_for_device_ready(struct blk_dev *dev)
 {
     long flags;
@@ -411,14 +406,17 @@ int guk_blk_do_io(struct blk_request *io_req)
     int id;
     int err = 0;
     RING_IDX prod;
+    struct blk_dev *dev;
 
     BUG_ON(io_req->state != BLK_EMPTY);
-    BUG_ON(io_req->device != 0);
-    BUG_ON(blk_info.state != ST_READY);
-    BUG_ON((io_req->address >> SECTOR_BITS) + io_req->end_sector > blk_info.device.sectors);
+    BUG_ON(io_req->device >= MAX_DEVICES);
 
-    prod = blk_info.ring.req_prod_pvt;
-    xen_req = RING_GET_REQUEST(&blk_info.ring, prod);
+    dev = &blk_devices[io_req->device];
+    BUG_ON(dev->state != ST_READY);
+    BUG_ON((io_req->address >> SECTOR_BITS) + io_req->end_sector > dev->device.sectors);
+
+    prod = dev->ring.req_prod_pvt;
+    xen_req = RING_GET_REQUEST(&dev->ring, prod);
 
     id = get_freelist_id();
     if (!id) {
@@ -460,12 +458,12 @@ int guk_blk_do_io(struct blk_request *io_req)
     xen_req->operation = io_req->operation; /* read or write */
     io_req->state = BLK_SUBMITTED;
     notify = 0;
-    blk_info.ring.req_prod_pvt = prod + 1;
+    dev->ring.req_prod_pvt = prod + 1;
 
     wmb();
-    RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&blk_info.ring, notify);
+    RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&dev->ring, notify);
     if (notify) {
-	notify_remote_via_evtchn(blk_info.evtchn);
+	notify_remote_via_evtchn(dev->evtchn);
     }
 out:
     return err;
@@ -529,16 +527,16 @@ int guk_blk_write(int device, long address, void *buf, int size)
     req.operation = BLK_REQ_WRITE;
 
     /* on return keep the lock of the device */
-    long flags = wait_for_device_ready(&blk_info);
+    long flags = wait_for_device_ready(&blk_devices[device]);
 
     init_completion(&comp);
     set_default_callback(&req, &comp);
 
     if (blk_do_io(&req)) {
 	sectors = -1;
-	spin_unlock_irqrestore(&blk_info.lock, flags);
+	spin_unlock_irqrestore(&blk_devices[device].lock, flags);
     } else {
-	spin_unlock_irqrestore(&blk_info.lock, flags);
+	spin_unlock_irqrestore(&blk_devices[device].lock, flags);
 	wait_for_completion(&comp);
     }
 
@@ -594,15 +592,15 @@ int guk_blk_read(int device, long address, void *buf, int size)
     req.state = BLK_EMPTY;
     req.operation = BLK_REQ_READ;
 
-    long flags = wait_for_device_ready(&blk_info);
+    long flags = wait_for_device_ready(&blk_devices[device]);
     init_completion(&comp);
     set_default_callback(&req, &comp);
 
     if (blk_do_io(&req)) {
-	spin_unlock_irqrestore(&blk_info.lock, flags);
+	spin_unlock_irqrestore(&blk_devices[device].lock, flags);
 	return -1;
     } else {
-	spin_unlock_irqrestore(&blk_info.lock, flags);
+	spin_unlock_irqrestore(&blk_devices[device].lock, flags);
 	wait_for_completion(&comp);
     }
     if (free_buf) {
@@ -621,22 +619,22 @@ static int blk_shutdown(void)
     return 0;
 }
 
-static void post_connect(void)
+static void post_connect(struct blk_dev *dev)
 {
     char xenbus_path[MAX_PATH];
     int error;
 
     /* get the device info from the backend */
-    snprintf(xenbus_path, MAX_PATH, "%s/sector-size", backend);
-    device_info->sector_size = xenbus_read_integer(xenbus_path);
+    snprintf(xenbus_path, MAX_PATH, "%s/sector-size", dev->backend);
+    dev->device.sector_size = xenbus_read_integer(xenbus_path);
 
-    snprintf(xenbus_path, MAX_PATH, "%s/sectors", backend);
-    device_info->sectors = xenbus_read_integer(xenbus_path);
+    snprintf(xenbus_path, MAX_PATH, "%s/sectors", dev->backend);
+    dev->device.sectors = xenbus_read_integer(xenbus_path);
 
-    snprintf(xenbus_path, MAX_PATH, "%s/info", backend);
-    device_info->info = xenbus_read_integer(xenbus_path);
+    snprintf(xenbus_path, MAX_PATH, "%s/info", dev->backend);
+    dev->device.info = xenbus_read_integer(xenbus_path);
 
-    snprintf(xenbus_path, MAX_PATH, "%s/%s", DEVICE_STRING, "0");
+    snprintf(xenbus_path, MAX_PATH, "%s/%d", DEVICE_STRING, dev->device.id);
     error = blk_connected(xenbus_path);
     if (error) {
 	DEBUG("%s ERROR: connected\n", __FUNCTION__);
@@ -644,23 +642,24 @@ static void post_connect(void)
     }
 
     long flags;
-    spin_lock_irqsave(&blk_info.lock, flags);
-    blk_info.state = ST_READY;
-    complete_all(&ready_completion);
-    spin_unlock_irqrestore(&blk_info.lock, flags);
+    spin_lock_irqsave(&dev->lock, flags);
+    dev->state = ST_READY;
+    spin_unlock_irqrestore(&dev->lock, flags);
 }
 
 static void blk_init(void)
 {
-    char *device;
+    char **devices;
+    int num_devices;
+    int i;
     char xenbus_path[MAX_PATH];
     int error;
     char *err;
 
     xenbus_watch_path(XBT_NIL, DEVICE_STRING, "blk_xenbus");
 again:
-    device = blk_explore();
-    if(!device) {
+    num_devices = blk_explore(&devices);
+    if(num_devices < 0) {
 	char *msg;
 	msg = xenbus_read_watch("blk_xenbus");
 	free(msg);
@@ -670,45 +669,51 @@ again:
     }
     xenbus_rm_watch("blk_xenbus");
 
-    device_info->id = (int)simple_strtol(device, NULL, 10);
-    snprintf(xenbus_path, MAX_PATH, "%s/%s/backend", DEVICE_STRING, device);
-
-    err = xenbus_read(XBT_NIL, xenbus_path, &backend);
-    if (err) {
-	printk("%s %d ERROR reading xenbus: %s\n", __FILE__, __LINE__, err);
-	free(err);
-	complete_all(&ready_completion);
-	return;
-    }
-
-    snprintf(xenbus_path, MAX_PATH, "%s/%s", DEVICE_STRING, device);
-
-    if (blk_init_ring(NULL)) {
-	complete_all(&ready_completion);
-	goto out_free;
-    }
-
-    if (blk_get_evtchn()) {
-	complete_all(&ready_completion);
-	goto out_free;
-    }
-
-    error = blk_inform_back(xenbus_path);
-    if (error) {
-	printk("%s ERROR: initialized\n", __FUNCTION__);
-	complete_all(&ready_completion);
-	goto out_free;
-    }
-
+    DEBUG("going to use %d block devices\n", num_devices);
     init_buffers();
 
-    snprintf(xenbus_path, MAX_PATH, "%s/state", backend);
-    xenbus_watch_path(XBT_NIL, xenbus_path, "blk-front");
-    xenbus_wait_for_value("blk-front", xenbus_path, "4"); /* wait for backend connection */
+    for (i=0; i<num_devices && i<MAX_DEVICES; ++i) {
+	DEBUG("init block device %d\n", i);
+	blk_devices[i].device.id = (int)simple_strtol(devices[i], NULL, 10);
+	snprintf(xenbus_path, MAX_PATH, "%s/%s/backend", DEVICE_STRING, devices[i]);
 
-    post_connect();
-out_free:
-    free(device);
+	err = xenbus_read(XBT_NIL, xenbus_path, &blk_devices[i].backend);
+	if (err) {
+	    printk("%s %d ERROR reading xenbus: %s\n", __FILE__, __LINE__, err);
+	    free(err);
+	    continue;
+	}
+
+	snprintf(xenbus_path, MAX_PATH, "%s/%s", DEVICE_STRING, devices[i]);
+
+	if (blk_init_ring(NULL, &blk_devices[i])) {
+	    continue;
+	}
+
+	if (blk_get_evtchn(&blk_devices[i])) {
+	    continue;
+	}
+
+	error = blk_inform_back(xenbus_path, &blk_devices[i]);
+	if (error) {
+	    printk("%s ERROR: initialized\n", __FUNCTION__);
+	    continue;
+	}
+
+	DEBUG("wait for backend %s\n", blk_devices[i].backend);
+	snprintf(xenbus_path, MAX_PATH, "%s/state", blk_devices[i].backend);
+	xenbus_watch_path(XBT_NIL, xenbus_path, "blk-front");
+	xenbus_wait_for_value("blk-front", xenbus_path, "4"); /* wait for backend connection */
+	xenbus_rm_watch("blk-front");
+
+	post_connect(&blk_devices[i]);
+	DEBUG("done init block device %d\n", i);
+    }
+    for (i=0; i<num_devices; ++i)
+	    free(devices[i]);
+    free(devices);
+
+    complete_all(&ready_completion);
     return;
 }
 
@@ -723,24 +728,26 @@ static int ring_has_unprocessed_resp(struct blkif_front_ring *ring)
 }
 
 #define MAX_POLL 12
-static long drain_io(long flags)
+static long drain_io(long flags, struct blk_dev *dev)
 {
-    int i = 0;
+    int i;
+
+    dev = &blk_devices[0];
 
     for(i = 0; i < MAX_POLL; ++i) {
-	if (ring_has_unprocessed_resp(&blk_info.ring)) {
-	    blk_front_handler(0, NULL);
+	if (ring_has_unprocessed_resp(&dev->ring)) {
+	    blk_front_handler(0, dev);
 	}
-	if(!ring_has_incomp_req(&blk_info.ring))
+	if(!ring_has_incomp_req(&dev->ring))
 	    break;
 
 	if(!in_irq()){
-	    spin_unlock_irqrestore(&blk_info.lock, flags);
+	    spin_unlock_irqrestore(&dev->lock, flags);
 	    sleep(5<<i);
-	    spin_lock_irqsave(&blk_info.lock, flags);
+	    spin_lock_irqsave(&dev->lock, flags);
 	}
     }
-    if(i == MAX_POLL && ring_has_incomp_req(&blk_info.ring)) {
+    if(i == MAX_POLL && ring_has_incomp_req(&dev->ring)) {
 	xprintk("BLOCK DEVICE WARNING: could not finish I/O requests in %d iterations\n", i);
 	DEBUG("BLOCK DEVICE WARNING: could not finish I/O requests in %d iterations\n", i);
     }
@@ -750,22 +757,31 @@ static long drain_io(long flags)
 static int blk_suspend(void)
 {
     long flags;
-    unbind_evtchn(blk_info.evtchn);
-    spin_lock_irqsave(&blk_info.lock, flags);
-    if (blk_info.state != ST_READY) {
-	spin_unlock_irqrestore(&blk_info.lock, flags);
-	return 0;
+    struct blk_dev *dev;
+    int i;
+
+    for (i=0; i<MAX_DEVICES; ++i) {
+	dev = &blk_devices[i];
+
+	unbind_evtchn(dev->evtchn);
+	spin_lock_irqsave(&dev->lock, flags);
+	if (dev->state != ST_READY) {
+	    spin_unlock_irqrestore(&dev->lock, flags);
+	    continue;
+	}
+
+	dev->state = ST_SUSPENDING;
+	flags = drain_io(flags, dev);
+	spin_unlock_irqrestore(&dev->lock, flags);
     }
-
-    blk_info.state = ST_SUSPENDING;
-
     init_completion(&ready_completion);
-    flags = drain_io(flags);
     /* all pending requests returned */
-    spin_unlock_irqrestore(&blk_info.lock, flags);
 
     xenbus_rm_watch("blk-front");
-    blk_info.state = ST_SUSPENDED;
+    for (i=0; i<MAX_DEVICES; ++i)
+	if (blk_devices[i].state == ST_SUSPENDING)
+	    blk_devices[i].state = ST_SUSPENDED;
+
     return 0;
 }
 
@@ -774,44 +790,57 @@ static int blk_resume(void)
     int retval = 1;
     char xenbus_path[MAX_PATH];
     char * err;
-    char *device;
+    char **devices;
+    int num_devices;
+    struct blk_dev *dev;
+    int i;
 
-    if (blk_info.state != ST_SUSPENDED)
-	return 0;
-
-    blk_info.state = ST_RESUMING;
-
-    device = blk_explore();
-    if(!device)
-	return 1;
-
-    snprintf(xenbus_path, MAX_PATH, "%s/%s/backend", DEVICE_STRING, device);
-    err = xenbus_read(XBT_NIL, xenbus_path, &backend);
-    if (err) {
-	printk("%s %d ERROR reading xenbus: %s\n", __FILE__, __LINE__, err);
-	free(err);
-    }
-
-    if (blk_init_ring(blk_info.ring.sring)) {
+    num_devices = blk_explore(&devices);
+    if(num_devices < 0)
 	goto out;
+
+    for(i=0; i<num_devices && i<MAX_DEVICES; ++i) {
+	dev = &blk_devices[i];
+
+	if (dev->state != ST_SUSPENDED)
+	    continue;
+
+	dev->state = ST_RESUMING;
+
+
+	snprintf(xenbus_path, MAX_PATH, "%s/%s/backend", DEVICE_STRING, devices[i]);
+	err = xenbus_read(XBT_NIL, xenbus_path, &dev->backend);
+	if (err) {
+	    printk("%s %d ERROR reading xenbus: %s\n", __FILE__, __LINE__, err);
+	    free(err);
+	}
+
+	if (blk_init_ring(dev->ring.sring, dev)) {
+	    continue;
+	}
+
+	if (blk_get_evtchn(dev)) {
+	    continue;
+	}
+
+	snprintf(xenbus_path, MAX_PATH, "%s/%s", DEVICE_STRING, devices[i]);
+	if (blk_inform_back(xenbus_path, dev)) {
+	    printk("%s ERROR: initialised\n", __FUNCTION__);
+	    continue;
+	}
+
+	snprintf(xenbus_path, MAX_PATH, "%s/state", dev->backend);
+	xenbus_watch_path(XBT_NIL, xenbus_path, "blk-front");
+	xenbus_wait_for_value("blk-front", xenbus_path, "4"); /* wait for backend connection */
+
+	post_connect(dev);
+	retval = 0;
     }
 
-    if (blk_get_evtchn()) {
-	goto out;
-    }
-
-    snprintf(xenbus_path, MAX_PATH, "%s/%s", DEVICE_STRING, device);
-    if (blk_inform_back(xenbus_path)) {
-	printk("%s ERROR: initialised\n", __FUNCTION__);
-	goto out;
-    }
-
-    snprintf(xenbus_path, MAX_PATH, "%s/state", backend);
-    xenbus_watch_path(XBT_NIL, xenbus_path, "blk-front");
-    xenbus_wait_for_value("blk-front", xenbus_path, "4"); /* wait for backend connection */
-
-    post_connect();
-    retval = 0;
+    for(i=0; i<num_devices; ++i)
+	free(devices[i]);
+    free(devices);
+    complete_all(&ready_completion);
 out:
     return retval;
 }
@@ -850,9 +879,13 @@ static struct service blk_service = {
 
 USED static int init_func(void)
 {
-    memset(&blk_info, 0, sizeof(blk_info));
-    spin_lock_init(&blk_info.lock);
-    blk_info.state = ST_UNKNOWN;
+    int i;
+    memset(&blk_devices, 0, sizeof(blk_devices));
+
+    for (i=0; i<MAX_DEVICES; ++i) {
+	spin_lock_init(&blk_devices[i].lock);
+	blk_devices[i].state = ST_UNKNOWN;
+    }
     init_completion(&ready_completion);
     register_service(&blk_service);
     return 0;

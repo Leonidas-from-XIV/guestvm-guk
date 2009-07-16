@@ -224,17 +224,20 @@ void print_runqueue_specific(int all, printk_function_ptr printk_function)
     struct list_head *it;
     struct thread *th;
     long flags;
+    int i;
     printk_function("%ld: ready_queue %lx, ready_lock %lx\n", NOW(), &ready_queue, &ready_lock);
 
     th = current;
     printk_function("   current \"%s\", id=%d, flags %x\n", th->name, th->id, th->flags);
+    i =0 ;
     spin_lock_irqsave(&ready_lock, flags);
     list_for_each(it, &ready_queue)
     {
-        th = list_entry(it, struct thread, ready_list);
-        if (all || !is_ukernel(th)) {
-            printk_function("   Thread \"%s\", id=%d, flags %x, cpu %d\n", th->name, th->id, th->flags, th->cpu);
-        }
+	BUG_ON(++i > thread_id);
+	th = list_entry(it, struct thread, ready_list);
+	if (all || !is_ukernel(th)) {
+	    printk_function("   Thread \"%s\", id=%d, flags %x, cpu %d\n", th->name, th->id, th->flags, th->cpu);
+	}
     }
     printk_function("\n");
     spin_unlock_irqrestore(&ready_lock, flags);
@@ -242,15 +245,15 @@ void print_runqueue_specific(int all, printk_function_ptr printk_function)
     print_sleep_queue_specific(all, printk_function);
 
     printk_function("all threads in the system:\n");
-    int i = 0;
+    i = 0;
     spin_lock(&thread_list_lock);
     list_for_each(it, &thread_list)
     {
-        th = list_entry(it, struct thread, thread_list);
-        if (all || !is_ukernel(th)) {
-            printk_function("%d\tThread \"%s\", id=%d, flags %x preempt %d cpu %d\n",
+	th = list_entry(it, struct thread, thread_list);
+	if (all || !is_ukernel(th)) {
+	    printk_function("%d\tThread \"%s\", id=%d, flags %x preempt %d cpu %d\n",
 		    ++i, th->name, th->id, th->flags, th->preempt_count, th->cpu);
-        }
+	}
     }
     spin_unlock(&thread_list_lock);
 }
@@ -259,17 +262,20 @@ void print_sleep_queue_specific(int ukernel, printk_function_ptr printk_function
     struct list_head *it;
     struct thread *th;
     struct sleep_queue *sq;
+    int i;
     long flags;
     printk_function("%ld: sleep_queue %lx, sleep_queue_lock %lx\n", NOW(), &sleep_queue, &sleep_lock);
+    i = 0;
     spin_lock_irqsave(&sleep_lock, flags);
     list_for_each(it, &sleep_queue)
     {
-        sq = list_entry(it, struct sleep_queue, list);
+	BUG_ON(++i > thread_id);
+	sq = list_entry(it, struct sleep_queue, list);
 	th = sq->thread;
-        if (ukernel || !is_ukernel(th)) {
-            printk_function("   Thread \"%s\", id=%d, flags %x, wakeup %ld, \n", th->name, th->id, th->flags, sq->wakeup_time);
-//	    backtrace(*(void **)th->sp, 0);
-        }
+	if (ukernel || !is_ukernel(th)) {
+	    printk_function("   Thread \"%s\", id=%d, flags %x, wakeup %ld, \n", th->name, th->id, th->flags, sq->wakeup_time);
+	    //	    backtrace(*(void **)th->sp, 0);
+	}
     }
     printk_function("\n");
     spin_unlock_irqrestore(&sleep_lock, flags);
@@ -508,6 +514,11 @@ void switch_thread_in(struct thread *prev)
     local_irq_enable();
 }
 
+static void print_queues(void)
+{
+    print_sleep_queue_specific(1, xprintk);
+	print_runqueue_specific(1, xprintk);
+}
 /*
  * return thread to run next
  *  - upcalls into the VM if upcalls are active and registered
@@ -517,6 +528,7 @@ static inline struct thread *pick_thread(struct thread *prev, int cpu)
     struct thread *next, *thread;
     struct list_head *t;
     long flags;
+    int i;
 
     next = NULL;
     spin_lock_irqsave(&ready_lock, flags);
@@ -535,15 +547,23 @@ static inline struct thread *pick_thread(struct thread *prev, int cpu)
     /* If there is a runnable thread that is not running on some other
      * CPU, then that is the next to run.
      */
+    i = 0;
     list_for_each(t, &ready_queue) {
+	if(++i > thread_id) { /* if ready queue is corrupted we hang in this loop; 
+				 try to break out and raise a BUG */
+	    spin_unlock_irqrestore(&ready_lock, flags);
+	    print_queues();
+	    BUG();
+	}
 	thread = list_entry(t, struct thread, ready_list);
+
 	if(is_runnable(thread)
 		&& !(is_running(thread) && thread->cpu != cpu)) {
-	  /* if Java thread we never switch threads between cpus (here) */
-	  if (!upcalls_active || is_ukernel(thread) || thread->cpu == cpu) {
-	    next = thread;
-	    break;
-	  }
+	    /* if Java thread we never switch threads between cpus (here) */
+	    if (!upcalls_active || is_ukernel(thread) || thread->cpu == cpu) {
+		next = thread;
+		break;
+	    }
 	}
     }
     if (next != NULL) {
@@ -810,6 +830,8 @@ struct thread* guk_create_thread_with_stack(char *name,
                                         unsigned long stack_size,
                                         void *data)
 {
+	static int count = 0;
+	xprintk("threads %d id %d name %s\n", ++count, thread_id, name);
     return create_thread_with_id_stack(name, function, flags, stack, stack_size, 
 				       data, thread_id++);
 }
@@ -942,8 +964,11 @@ void db_wake(struct thread *thread)
     } else {
 	long flags;
 	spin_lock_irqsave(&ready_lock, flags);
-	set_runnable(thread);
-	list_add_tail(&thread->ready_list, &ready_queue);
+	if(!is_runnable(thread)) {
+	    BUG_ON(is_runnable(thread));
+	    set_runnable(thread);
+	    list_add_tail(&thread->ready_list, &ready_queue);
+	}
 	spin_unlock_irqrestore(&ready_lock, flags);
     }
     /* cpu running this thread may be blocked in idle thread, so kick it */
@@ -970,7 +995,7 @@ void guk_wake(struct thread *thread)
 	if (!is_runnable(thread) || (upcalls_active && is_appsched(thread))) {
 	    db_wake(thread);
 	} else {
-	    //xprintk("WARNING: waking a runnable thread %d %s %x\n", thread->id, thread->name, thread->flags);
+	  //  xprintk("WARNING: waking a runnable thread %d %s %x\n", thread->id, thread->name, thread->flags);
 	    //print_backtrace(current);
 	}
     }
