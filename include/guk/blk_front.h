@@ -91,7 +91,7 @@ extern int guk_blk_get_devices(void);
 extern int guk_blk_get_sectors(int device);
 
 /*
- * submit request to Xen; not this is async the caller has take care
+ * submit request to Xen; note this is async the caller has take care
  * of registering a callback and wait for the completion of the request
  */
 extern int guk_blk_do_io(struct blk_request *req);
