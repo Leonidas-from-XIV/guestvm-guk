@@ -32,6 +32,10 @@
 #ifndef _LINUX_LIST_H
 #define _LINUX_LIST_H
 
+#ifndef BUG_ON 
+#define BUG_ON(x)
+#endif
+
 /*
  * Simple doubly linked list implementation.
  *
@@ -86,6 +90,7 @@ static __inline__ void __list_add(struct list_head * _new,
 static __inline__ void list_add(struct list_head *_new, struct list_head *head)
 {
 	__list_add(_new, head, head->next);
+	BUG_ON(_new->next == _new); /* check for corrupted lists */
 }
 
 /**
@@ -99,6 +104,7 @@ static __inline__ void list_add(struct list_head *_new, struct list_head *head)
 static __inline__ void list_add_tail(struct list_head *_new, struct list_head *head)
 {
 	__list_add(_new, head->prev, head);
+	BUG_ON(_new->next == _new); /* check for corrupted lists */
 }
 
 /*
