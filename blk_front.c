@@ -58,7 +58,10 @@
 #include <errno.h>
 
 #define MAX_PATH      64
-#define MAX_DEVICES    1
+
+#ifndef MAX_DEVICES
+#define MAX_DEVICES    8 /* default number of devices */
+#endif
 
 #define DEVICE_STRING "device/vbd"
 
@@ -267,7 +270,7 @@ static int blk_explore(char ***dirs)
 	return -1;
     }
 
-    for (i=0; dirs[i]; i++) ; /* count the connected devices */
+    for (i=0; (*dirs)[i]; i++); /* count the connected devices */
 
     return i;
 }
@@ -379,6 +382,7 @@ int guk_blk_get_sectors(int device)
     return blk_devices[device].device.sectors;
 }
 
+/* returns with device lock held */
 static inline long wait_for_device_ready(struct blk_dev *dev)
 {
     long flags;
@@ -402,10 +406,12 @@ int guk_blk_do_io(struct blk_request *io_req)
     int id;
     int err = 0;
     RING_IDX prod;
-    struct blk_dev *dev = &blk_devices[io_req->device];
+    struct blk_dev *dev;
 
     BUG_ON(io_req->state != BLK_EMPTY);
-    BUG_ON(io_req->device != 0);
+    BUG_ON(io_req->device >= MAX_DEVICES);
+
+    dev = &blk_devices[io_req->device];
     BUG_ON(dev->state != ST_READY);
     BUG_ON((io_req->address >> SECTOR_BITS) + io_req->end_sector > dev->device.sectors);
 
@@ -638,7 +644,6 @@ static void post_connect(struct blk_dev *dev)
     long flags;
     spin_lock_irqsave(&dev->lock, flags);
     dev->state = ST_READY;
-    complete_all(&ready_completion);
     spin_unlock_irqrestore(&dev->lock, flags);
 }
 
@@ -664,9 +669,11 @@ again:
     }
     xenbus_rm_watch("blk_xenbus");
 
+    DEBUG("going to use %d block devices\n", num_devices);
     init_buffers();
 
     for (i=0; i<num_devices && i<MAX_DEVICES; ++i) {
+	DEBUG("init block device %d\n", i);
 	blk_devices[i].device.id = (int)simple_strtol(devices[i], NULL, 10);
 	snprintf(xenbus_path, MAX_PATH, "%s/%s/backend", DEVICE_STRING, devices[i]);
 
@@ -674,39 +681,39 @@ again:
 	if (err) {
 	    printk("%s %d ERROR reading xenbus: %s\n", __FILE__, __LINE__, err);
 	    free(err);
-	    complete_all(&ready_completion);
 	    continue;
 	}
 
 	snprintf(xenbus_path, MAX_PATH, "%s/%s", DEVICE_STRING, devices[i]);
 
 	if (blk_init_ring(NULL, &blk_devices[i])) {
-	    complete_all(&ready_completion);
 	    continue;
 	}
 
 	if (blk_get_evtchn(&blk_devices[i])) {
-	    complete_all(&ready_completion);
 	    continue;
 	}
 
 	error = blk_inform_back(xenbus_path, &blk_devices[i]);
 	if (error) {
 	    printk("%s ERROR: initialized\n", __FUNCTION__);
-	    complete_all(&ready_completion);
 	    continue;
 	}
 
-
+	DEBUG("wait for backend %s\n", blk_devices[i].backend);
 	snprintf(xenbus_path, MAX_PATH, "%s/state", blk_devices[i].backend);
 	xenbus_watch_path(XBT_NIL, xenbus_path, "blk-front");
 	xenbus_wait_for_value("blk-front", xenbus_path, "4"); /* wait for backend connection */
+	xenbus_rm_watch("blk-front");
 
 	post_connect(&blk_devices[i]);
+	DEBUG("done init block device %d\n", i);
     }
     for (i=0; i<num_devices; ++i)
 	    free(devices[i]);
     free(devices);
+
+    complete_all(&ready_completion);
     return;
 }
 
@@ -833,6 +840,7 @@ static int blk_resume(void)
     for(i=0; i<num_devices; ++i)
 	free(devices[i]);
     free(devices);
+    complete_all(&ready_completion);
 out:
     return retval;
 }
