@@ -830,10 +830,8 @@ struct thread* guk_create_thread_with_stack(char *name,
                                         unsigned long stack_size,
                                         void *data)
 {
-	static int count = 0;
-	xprintk("threads %d id %d name %s\n", ++count, thread_id, name);
-    return create_thread_with_id_stack(name, function, flags, stack, stack_size, 
-				       data, thread_id++);
+	return create_thread_with_id_stack(name, function, flags, stack,
+			stack_size, data, thread_id++);
 }
 
 struct thread* create_thread(char *name,
