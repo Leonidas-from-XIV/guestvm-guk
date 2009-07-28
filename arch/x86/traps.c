@@ -216,7 +216,7 @@ void do_page_fault(struct pt_regs *regs, unsigned long error_code)
       /* If db-back initiated this access, we want to report failure and recover */
       if (db_is_dbaccess_addr(addr)) {
         jmp_db_back_handler(db_back_handler);
-      } else if (db_is_watchpoint(addr)) {
+      } else if (db_is_watchpoint(addr, regs)) {
 	return;
       }
     }
@@ -261,11 +261,14 @@ void do_coprocessor_error(struct pt_regs * regs)
 void simd_math_error(void *eip)
 {
     xprintk("SIMD error\n");
+    crash_exit();
 }
 
 void do_simd_coprocessor_error(struct pt_regs * regs)
 {
     xprintk("SIMD copro error\n");
+    dump_regs_and_stack(regs, xprintk);
+    crash_exit();
 }
 
 void do_spurious_interrupt_bug(struct pt_regs * regs)
@@ -289,7 +292,7 @@ void do_debug(struct pt_regs *regs)
 {
     struct thread *thread = current;
     struct fp_regs *fpregs = thread->fpregs;
-    if (guk_debugging() && db_watchpoint_step()) {
+    if (guk_debugging() && db_watchpoint_step(regs)) {
       return;
     }
     asm (save_fp_regs_asm : : [fpr] "r" (fpregs));

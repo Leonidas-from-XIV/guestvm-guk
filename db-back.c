@@ -75,9 +75,9 @@ static char *cmd_line;
 /* page for communicating block data */
 static grant_ref_t data_grant_ref;
 static char *data_page;
-/* list for watchpoints */
+/* list for watchpoints, does not need a lock because it there is no concurrent access.
+ */
 static LIST_HEAD(watchpoints_list);
-static DEFINE_SPINLOCK(watchpoints_list_lock);
 struct db_watchpoint {
   struct list_head list;
   unsigned long address;
@@ -674,7 +674,6 @@ static struct db_watchpoint *get_watchpoint(unsigned long address) {
     struct db_watchpoint *wp;
     struct db_watchpoint *result = NULL;
     unsigned long page_address = round_pgdown(address);
-    spin_lock(&watchpoints_list_lock);
     list_for_each(list_head, &watchpoints_list) {
         wp = list_entry(list_head, struct db_watchpoint, list);
         if(wp->address == address) {
@@ -685,7 +684,6 @@ static struct db_watchpoint *get_watchpoint(unsigned long address) {
 	  /* but keep looking for an exact match */
         }
     }
-    spin_unlock(&watchpoints_list_lock);
     return result;
 }
 
@@ -700,7 +698,8 @@ static void deactivate_watchpoint(struct db_watchpoint *wp) {
     DEBUG(2, "remapped page at %lx\n", wp->page_address);
 }
 
-int db_is_watchpoint(unsigned long address) {
+/* Ths is called from the page fault handler */
+int db_is_watchpoint(unsigned long address, struct pt_regs *regs) {
   struct thread *thread = current;
   struct db_watchpoint *wp = get_watchpoint(address);
   if (wp == NULL) return 0;
@@ -721,23 +720,23 @@ int db_is_watchpoint(unsigned long address) {
        unprotecting the page as otherwise there is a tiny window where
        a watchpoint on this page in a thread on another CPU could be missed.
        But we can't do that from here and it's a lot of work.
+
      */
     deactivate_watchpoint(wp);
     per_cpu(smp_processor_id(), db_support) = wp;
-    thread->regs->eflags |= 0x00000100; /* Trap Flag */
+    regs->eflags |= 0x00000100; /* Trap Flag */
   }
   return 1;
 }
 
-/* This is called from the trap[ handler after db_is_watchpoint returns from an access
+/* This is called from the trap handler after db_is_watchpoint returns from an access
    to a watchpointed page. We need to protect the page again and continue.
  */
-int db_watchpoint_step(void) {
-   struct thread *thread = current;
+int db_watchpoint_step(struct pt_regs *regs) {
    struct db_watchpoint *wp =  (struct db_watchpoint *) per_cpu(smp_processor_id(), db_support);
    if (wp == NULL) return 0;
    activate_watchpoint(wp);
-   thread->regs->eflags &= ~0x00000100;
+   regs->eflags &= ~0x00000100;
    per_cpu(smp_processor_id(), db_support) = NULL;
    return 1;
 }
@@ -760,23 +759,19 @@ static void validate_watchpoint(unsigned long address) {
 USED static void activate_watchpoints(void) {
     struct list_head *list_head;
     struct db_watchpoint *wp;
-    spin_lock(&watchpoints_list_lock);
     list_for_each(list_head, &watchpoints_list) {
       wp = list_entry(list_head, struct db_watchpoint, list);
       activate_watchpoint(wp);
     }
-    spin_unlock(&watchpoints_list_lock);
 }
 
 USED static void deactivate_watchpoints(void) {
     struct list_head *list_head;
     struct db_watchpoint *wp;
-    spin_lock(&watchpoints_list_lock);
     list_for_each(list_head, &watchpoints_list) {
       wp = list_entry(list_head, struct db_watchpoint, list);
       deactivate_watchpoint(wp);
     }
-    spin_unlock(&watchpoints_list_lock);
 }
 
 static void dispatch_db_activate_watchpoint(struct dbif_request *req) {
@@ -790,9 +785,7 @@ static void dispatch_db_activate_watchpoint(struct dbif_request *req) {
     wp->address = req->u.watchpoint_request.address;
     wp->size = req->u.watchpoint_request.size;
     wp->kind = req->u.watchpoint_request.kind;
-    spin_lock(&watchpoints_list_lock);
     list_add_tail(&wp->list, &watchpoints_list);
-    spin_unlock(&watchpoints_list_lock);
     wp->pfn = guk_not11_virt_to_pfn(wp->address, &pte);
     wp->page_address = round_pgdown(wp->address);
     activate_watchpoint(wp);
@@ -811,9 +804,7 @@ static void dispatch_db_deactivate_watchpoint(struct dbif_request *req) {
     wp = get_watchpoint(req->u.watchpoint_request.address);
     if (wp != NULL && wp->address == req->u.watchpoint_request.address) {
       /* remove */
-      spin_lock(&watchpoints_list_lock);
       list_del(&wp->list);
-      spin_unlock(&watchpoints_list_lock);
       /* any other watchpoints on this page? */
       wpp = get_watchpoint(req->u.watchpoint_request.address);
       if (wpp == NULL) {

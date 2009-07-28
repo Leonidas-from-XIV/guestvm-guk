@@ -48,8 +48,8 @@ void guk_db_exit_notify_and_wait(void);
 extern unsigned long db_back_handler[3];
 
 void jmp_db_back_handler(void* handler_addr);
-int db_is_watchpoint(unsigned long addr);
-int db_watchpoint_step(void);
+int db_is_watchpoint(unsigned long addr, struct pt_regs *regs);
+int db_watchpoint_step(struct pt_regs *regs);
 int db_is_dbaccess_addr(unsigned long addr);
 int db_is_dbaccess(void);
 
