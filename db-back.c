@@ -419,12 +419,10 @@ static void single_step_thread(struct thread *thread) {
     printk("Preempt count = %lx", thread->preempt_count);
   BUG_ON(thread->preempt_count != 1);
   regs = (struct pt_regs*)thread->regs;
-  if(regs != NULL) {
-    DEBUG(1, " >> Thread %d found (regs=%lx, regs=%lx).",
-	  thread->id, thread->regs, thread->regs->rip);
-    //BUG_ON(thread->regs->eflags > 0xFFF);
-    thread->regs->eflags |= 0x00000100; /* Trap Flag */
-  }
+  BUG_ON(regs == NULL);
+  DEBUG(1, " >> Thread %d found (regs=%lx, rip=%lx).",
+	thread->id, thread->regs, thread->regs->rip);
+  thread->regs->eflags |= 0x00000100; /* Trap Flag */
 
   /* do_debug trap which happens soon after waking up, will set tmp to 1
    * */
@@ -432,6 +430,8 @@ static void single_step_thread(struct thread *thread) {
   while(is_runnable(thread) || is_running(thread)){
     nanosleep(RELAX_NS);
   }
+  DEBUG(1, " >> Thread %d stepped (regs=%lx, rip=%lx).",
+	thread->id, thread->regs, thread->regs->rip);
   clear_stepped(thread);
   /* Here, the thread is not runnable any more, and therefore there will
    * be no exceptions happening on it */
