@@ -40,6 +40,7 @@
 #include <guk/time.h>
 #include <guk/bug.h>
 
+/*
 struct fp_regs {
         unsigned long xmm0;
         unsigned long xmm1;
@@ -57,7 +58,46 @@ struct fp_regs {
         unsigned long xmm13;
         unsigned long xmm14;
         unsigned long xmm15;
+        unsigned int mxcsr;
 };
+*/
+
+struct fp_regs {
+    unsigned long filler1; unsigned long filler2;
+    unsigned long filler3; unsigned int mxcsr; unsigned int mxcsr_mask;
+    unsigned long mm0; unsigned long reserved0;
+    unsigned long mm1; unsigned long reserved1;
+    unsigned long mm2; unsigned long reserved2;
+    unsigned long mm3; unsigned long reserved3;
+    unsigned long mm4; unsigned long reserved4;
+    unsigned long mm5; unsigned long reserved5;
+    unsigned long mm6; unsigned long reserved6;
+    unsigned long mm7; unsigned long reserved7;
+    unsigned long xmm0; unsigned long xmmh0;
+    unsigned long xmm1; unsigned long xmmh1;
+    unsigned long xmm2; unsigned long xmmh2;
+    unsigned long xmm3; unsigned long xmmh3;
+    unsigned long xmm4; unsigned long xmmh4;
+    unsigned long xmm5; unsigned long xmmh5;
+    unsigned long xmm6; unsigned long xmmh6;
+    unsigned long xmm7; unsigned long xmmh7;
+    unsigned long xmm8; unsigned long xmmh8;
+    unsigned long xmm9; unsigned long xmmh9;
+    unsigned long xmm10; unsigned long xmmh10;
+    unsigned long xmm11; unsigned long xmmh11;
+    unsigned long xmm12; unsigned long xmmh12;
+    unsigned long xmm13; unsigned long xmmh13;
+    unsigned long xmm14; unsigned long xmmh14;
+    unsigned long xmm15; unsigned long xmmh15;
+    unsigned long reserved8; unsigned long reserved9;
+    unsigned long reserved10; unsigned long reserved11;
+    unsigned long reserved12; unsigned long reserved13;
+    unsigned long reserved14; unsigned long reserved15;
+    unsigned long reserved16; unsigned long reserved17;
+    unsigned long reserved18; unsigned long reserved19;
+};
+
+
 struct thread {
     int               preempt_count; /*  0 => preemptable,
                                         >0 => preemption disabled,
@@ -339,6 +379,9 @@ void guk_sleep_queue_del(struct sleep_queue *sq);
 #define print_runqueue guk_print_runqueue
 #define kick_cpu guk_kick_cpu
 
+#define MXCSRINIT 0x1f80
+
+/*
 #define save_fp_regs_asm \
   "movsd %%xmm0, 0(%[fpr])\n\t" \
   "movsd %%xmm1, 8(%[fpr])\n\t" \
@@ -355,7 +398,8 @@ void guk_sleep_queue_del(struct sleep_queue *sq);
   "movsd %%xmm12, 96(%[fpr])\n\t" \
   "movsd %%xmm13, 104(%[fpr])\n\t" \
   "movsd %%xmm14, 112(%[fpr])\n\t" \
-  "movsd %%xmm15, 120(%[fpr])\n\t"
+  "movsd %%xmm15, 120(%[fpr])\n\t" \
+  "stmxcsr 128(%[fpr])\n\t"
 
 #define restore_fp_regs_asm \
   "movsd 0(%[fpr]), %%xmm0\n\t" \
@@ -373,7 +417,14 @@ void guk_sleep_queue_del(struct sleep_queue *sq);
   "movsd 96(%[fpr]), %%xmm12\n\t" \
   "movsd 104(%[fpr]), %%xmm13\n\t" \
   "movsd 112(%[fpr]), %%xmm14\n\t" \
-  "movsd 120(%[fpr]), %%xmm15\n\t"
+  "movsd 120(%[fpr]), %%xmm15\n\t" \
+  "ldmxcsr 128(%[fpr])\n\t"
+*/
+
+
+#define save_fp_regs_asm "fxsave (%[fpr])\n\t"
+
+#define restore_fp_regs_asm "fxrstor (%[fpr])\n\t"
 
 
 #endif /* __SCHED_H__ */

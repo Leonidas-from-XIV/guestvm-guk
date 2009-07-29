@@ -661,11 +661,11 @@ void guk_schedule(void)
         BUG_ON(irqs_disabled());
         local_irq_disable();
         this_cpu(current_thread) = next;
-	if (!is_ukernel(prev)) {
+	if (1/*!is_ukernel(prev)*/) {
 	  struct fp_regs *fpregs = prev->fpregs;
 	  asm (save_fp_regs_asm : : [fpr] "r" (fpregs));	  
 	}
-	if (!is_ukernel(next)) {
+	if (1/*!is_ukernel(next)*/) {
 	  struct fp_regs *fpregs = next->fpregs;
 	  asm (restore_fp_regs_asm : : [fpr] "r" (fpregs));	  
 	}
@@ -791,7 +791,8 @@ static struct thread* create_thread_with_id_stack(char *name,
     /* Not runnable, not exited, not sleeping, maybe ukernel thread */
     thread->flags = flags;
     thread->regs = NULL;
-    thread->fpregs = xmalloc(struct fp_regs);
+    thread->fpregs = (struct fp_regs *)alloc_page();
+    thread->fpregs->mxcsr = MXCSRINIT;
     /* stack != NULL means Java Thread */
     if (stack == NULL || !upcalls_active) {
       thread->cpu = -1;
@@ -863,6 +864,8 @@ struct thread* create_idle_thread(unsigned int cpu)
     /* Not runnable, not exited, not sleeping */
     thread->flags = UKERNEL_FLAG;
     thread->regs = NULL;
+    thread->fpregs = (struct fp_regs *)alloc_page();
+    thread->fpregs->mxcsr = MXCSRINIT;
     thread->cpu = cpu;
     thread->preempt_count = 1;
     thread->resched_running_time = 0;
