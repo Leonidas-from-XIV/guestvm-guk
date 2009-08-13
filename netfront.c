@@ -296,6 +296,9 @@ static inline void alloc_rings(struct net_info *info)
 	rxs = (struct netif_rx_sring *) alloc_page();
 	memset(txs,0,PAGE_SIZE);
 	memset(rxs,0,PAGE_SIZE);
+    } else {
+	BUG();
+	return;
     }
 
     SHARED_RING_INIT(txs);
