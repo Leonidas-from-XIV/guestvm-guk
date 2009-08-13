@@ -51,6 +51,7 @@
 
 #include <fsif.h>
 #include <list.h>
+#include <stdio.h>
 
 #ifdef FS_DEBUG
 #define DEBUG(_f, _a...) \
@@ -58,7 +59,6 @@
 #else
 #define DEBUG(_f, _a...)    ((void)0)
 #endif
-
 
 struct fs_request;
 
@@ -144,7 +144,7 @@ static void commit_fsif_request(struct fs_import *import, RING_IDX idx)
     notify_remote_via_evtchn(import->local_port);
 }
 
-
+/* hroeck FIXME: the following suffers form the ABA problem */
 
 static inline void add_id_to_freelist(unsigned int id,unsigned short* freelist)
 {
@@ -188,7 +188,7 @@ again:
 /******************************************************************************/
 /*                         INDIVIDUAL FILE OPERATIONS                         */
 /******************************************************************************/
-int guk_fs_open(struct fs_import *import, char *file, int flags)
+int guk_fs_open(struct fs_import *import, const char *file, int flags)
 {
     struct fs_request *fsr;
     unsigned short priv_req_id;
@@ -262,7 +262,7 @@ int guk_fs_close(struct fs_import *import, int fd)
     return ret;
 }
 
-size_t guk_fs_read(struct fs_import *import, int fd, void *buf,
+ssize_t guk_fs_read(struct fs_import *import, int fd, void *buf,
                ssize_t len, ssize_t offset)
 {
     struct fs_request *fsr;
@@ -323,7 +323,7 @@ size_t guk_fs_read(struct fs_import *import, int fd, void *buf,
     return ret;
 }
 
-ssize_t guk_fs_write(struct fs_import *import, int fd, void *buf,
+ssize_t guk_fs_write(struct fs_import *import, int fd, const void *buf,
                  ssize_t len, ssize_t offset)
 {
     struct fs_request *fsr;
@@ -369,11 +369,12 @@ ssize_t guk_fs_write(struct fs_import *import, int fd, void *buf,
 
 static int fs_xstat(struct fs_import *import,
             int fd,
-            char *file,
-            struct fsif_stat_response *stat,
-	    int req_type)
+            const char *file,
+            struct fsif_stat *stat_buf,
+			int req_type)
 {
     struct fs_request *fsr;
+	struct fsif_stat *buf;
     unsigned short priv_req_id;
     RING_IDX back_req_id;
     struct fsif_request *req;
@@ -402,14 +403,23 @@ static int fs_xstat(struct fs_import *import,
 
     /* Set blocked flag before commiting the request, thus avoiding missed
      * response race */
+	preempt_disable();
     block(current);
     commit_fsif_request(import, back_req_id);
+	preempt_enable();
     schedule();
 
     /* Read the response */
     ret = (int)fsr->shadow_rsp.ret_val;
     DEBUG("Following ret from fstat: %d\n", ret);
-    memcpy(stat, fsr->page, sizeof(struct fsif_stat_response));
+
+    //memcpy(stat_buf, fsr->page, sizeof(struct stat));
+	buf = (struct fsif_stat *)fsr->page;
+	stat_buf->st_mode = buf->st_mode;
+	stat_buf->st_size = buf->st_size;
+	stat_buf->st_blksize = buf->st_blksize;
+	stat_buf->st_blocks = buf->st_mode;
+
     add_id_to_freelist(priv_req_id, import->freelist);
 
     return ret;
@@ -417,15 +427,15 @@ static int fs_xstat(struct fs_import *import,
 
 int guk_fs_fstat(struct fs_import *import,
             int fd,
-            struct fsif_stat_response *stat)
+            struct fsif_stat *stat_buf)
 {
-    return fs_xstat(import, fd, NULL, stat, REQ_FSTAT);
+    return fs_xstat(import, fd, NULL, stat_buf, REQ_FSTAT);
 }
 int guk_fs_stat(struct fs_import *import,
-            char *file,
-            struct fsif_stat_response *stat)
+            const char *file,
+            struct fsif_stat *stat_buf)
 {
-    return fs_xstat(import, -1, file, stat, REQ_STAT);
+    return fs_xstat(import, -1, file, stat_buf, REQ_STAT);
 }
 
 int guk_fs_truncate(struct fs_import *import,
@@ -455,8 +465,10 @@ int guk_fs_truncate(struct fs_import *import,
 
     /* Set blocked flag before commiting the request, thus avoiding missed
      * response race */
+	preempt_disable();
     block(current);
     commit_fsif_request(import, back_req_id);
+	preempt_enable();
     schedule();
 
     /* Read the response */
@@ -646,7 +658,7 @@ exit:
     return files;
 }
 
-int guk_fs_chmod(struct fs_import *import, int fd, int32_t mode)
+int guk_fs_fchmod(struct fs_import *import, int fd, int32_t mode)
 {
     struct fs_request *fsr;
     unsigned short priv_req_id;
@@ -979,6 +991,7 @@ static int init_fs_import(struct fs_import *import, int test)
                                 ANY_CPU,
                                 import,
                                 &import->local_port));
+    unmask_evtchn(import->local_port);
 
 
     self_id = get_self_id();
@@ -1040,18 +1053,20 @@ abort_transaction:
 done:
 
 #define WAIT_PERIOD 10   /* Wait period in ms */
-#define MAX_WAIT    10   /* Max number of WAIT_PERIODs */
+#define MAX_WAIT    50   /* Max number of WAIT_PERIODs */
     import->backend = NULL;
     sprintf(r_nodename, "%s/backend", nodename);
 
     for(retry = MAX_WAIT; retry > 0; retry--)
     {
         err = xenbus_read(XBT_NIL, r_nodename, &import->backend);
-	if (err) {
-	    printk("%s %d ERROR reading xenbus: %s\n", __FILE__, __LINE__, err);
-	    free(err);
-	    continue;
-	}
+		if (err) {
+			if (trace_fs_front()) 
+				tprintk("%s %d ERROR reading xenbus: %s\n", __FILE__, __LINE__, err);
+			free(err);
+			sleep(WAIT_PERIOD);
+			continue;
+		}
         if(import->backend) {
             if (trace_fs_front()) 
 		printk("Backend found at %s\n", import->backend);
@@ -1061,7 +1076,8 @@ done:
 
     if(!import->backend)
     {
-        printk("No backend available.\n");
+		if (trace_fs_front()) 
+			tprintk("No backend available.\n");
         /* TODO - cleanup datastructures/xenbus */
         return 1;
     }
@@ -1077,6 +1093,52 @@ done:
     return 0;
 }
 
+
+static void add_export(struct list_head *exports, unsigned int domid)
+{
+    char node[1024], path[1024], **exports_list = NULL, *ret_msg;
+    char *msg = NULL;
+    int j = 0;
+    static int import_id = 0;
+
+    sprintf(node, "/local/domain/%d/backend/vfs/exports", domid);
+    ret_msg = xenbus_ls(XBT_NIL, node, &exports_list);
+    if (ret_msg && strcmp(ret_msg, "ENOENT"))
+        printk("couldn't read %s: %s\n", node, ret_msg);
+    while(exports_list && exports_list[j])
+    {
+        struct fs_import *import; 
+        int export_id = -1;
+
+        sscanf(exports_list[j], "%d", &export_id);
+        if(export_id >= 0)
+        {
+            import = xmalloc(struct fs_import);
+            import->dom_id = domid;
+
+		sprintf(path, "%s/%d/path", node, export_id);
+		msg = xenbus_read(XBT_NIL, path, &import->path);
+		if (msg) {
+		    printk("%s %d ERROR reading xenbus: %s\n", __FILE__, __LINE__, msg);
+		    goto exit;
+		}
+
+            import->export_id = export_id;
+            import->import_id = import_id++;
+            INIT_LIST_HEAD(&import->list);
+            list_add(&import->list, exports);
+        }
+        free(exports_list[j]);
+        j++;
+    }
+exit:
+    if(exports_list)
+        free(exports_list);
+    if(ret_msg)
+        free(ret_msg);
+}
+
+#if 0
 static struct list_head* probe_exports(void)
 {
     struct list_head *exports;
@@ -1090,10 +1152,11 @@ static struct list_head* probe_exports(void)
     msg = xenbus_ls(XBT_NIL, "/local/domain", &node_list);
     if(msg)
     {
-        printk("Could not list VFS exports (%s).\n", msg);
+        if (trace_fs_front())
+			tprintk("Could not list VFS exports (%s).\n", msg);
         goto exit;
     }
-
+    	
     while(node_list[i])
     {
         char node[1024], path[1024], **exports_list = NULL, *ret_msg;
@@ -1139,32 +1202,24 @@ exit:
         free(node_list);
     return exports;
 }
+#endif
 
 
-static struct list_head *fs_imports;
+static LIST_HEAD(exports);
+
 static int fs_init = 0;
-
-struct list_head *guk_fs_get_imports(void) {
-  while (!fs_init) {
-    sleep(1000);
-  }
-
-  if (fs_init == 1)
-      return fs_imports;
-  else
-      return NULL;
-}
-
-void init_fs_frontend(int test)
+static void init_fs_frontend(int test)
 {
     struct list_head *entry;
-    struct fs_import *import;
+    struct fs_import *import = NULL;
     if (trace_fs_front()) tprintk("Initing FS frontend(s), test %d.\n", test);
 
-    fs_imports = probe_exports();
-    list_for_each(entry, fs_imports)
+//    fs_imports = probe_exports();
+    add_export(&exports, 0);
+    list_for_each(entry, &exports)
     {
         import = list_entry(entry, struct fs_import, list);
+
         if (trace_fs_front())
 	    tprintk("FS export [dom=%d, id=%d] found\n",
                 import->dom_id, import->export_id);
@@ -1175,6 +1230,32 @@ void init_fs_frontend(int test)
 	}
     }
     fs_init = 1;
+}
+
+struct list_head *guk_fs_get_imports(void) {
+  while (!fs_init) {
+    sleep(1000);
+  }
+
+  if (fs_init == 1)
+      return exports.next;
+  else
+      return NULL;
+}
+
+struct fs_import *guk_fs_get_next(struct fs_import *import)
+{
+	struct fs_import *next = NULL;
+
+	if (import->list.next != &exports)
+		next = list_entry(import->list.next, struct fs_import, list);
+
+	return next;
+}
+
+char *guk_fs_import_path(struct fs_import *import)
+{
+	return import->path;
 }
 
 static int fs_suspend(void)

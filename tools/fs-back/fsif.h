@@ -87,18 +87,6 @@ struct fsif_stat_request {
     grant_ref_t gref;
 };
 
-/* This structure is a copy of some fields from stat structure, writen to the
- * granted page. */
-struct fsif_stat_response {
-    int32_t  stat_mode;
-    uint32_t stat_uid;
-    uint32_t stat_gid;
-    int64_t  stat_size;
-    int64_t  stat_atime;
-    int64_t  stat_mtime;
-    int64_t  stat_ctime;
-};
-
 struct fsif_truncate_request {
     int fd;
     int64_t length;
@@ -147,6 +135,12 @@ struct fsif_sync_request {
     int fd;
 };
 
+struct fsif_stat {
+	int    st_mode;    /* protection */
+	int    st_size;    /* total size, in bytes */
+	int    st_blksize; /* blocksize for filesystem I/O */
+	int    st_blocks;  /* number of blocks allocated */
+};
 
 /* FS operation request */
 struct fsif_request {

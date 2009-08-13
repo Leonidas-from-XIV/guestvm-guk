@@ -68,10 +68,17 @@ static bool xenbus_printf(struct xs_handle *xsh,
 bool xenbus_create_request_node(void)
 {
     bool ret;
-    
+    struct xs_permissions perms;
+
     assert(xsh != NULL);
     xs_rm(xsh, XBT_NULL, WATCH_NODE);
     ret = xs_mkdir(xsh, XBT_NULL, WATCH_NODE); 
+    if (!ret)
+        return false;
+
+    perms.id = 0;
+    perms.perms = XS_PERM_WRITE;
+    ret = xs_set_permissions(xsh, XBT_NULL, WATCH_NODE, &perms, 1);
 
     return ret;
 }
@@ -80,6 +87,8 @@ int xenbus_register_export(struct fs_export *export)
 {
     xs_transaction_t xst = 0;
     char node[1024];
+    char path[1024];
+    struct xs_permissions perms;
 
     assert(xsh != NULL);
     if(xsh == NULL)
@@ -96,24 +105,40 @@ int xenbus_register_export(struct fs_export *export)
         printf("Could not start a transaction.\n");
         goto error_exit;
     }
-    printf("XS transaction is %d\n", xst); 
- 
+    printf("XS transaction is %d\n", xst);
+
     /* Create node string */
-    sprintf(node, "%s/%d", EXPORTS_NODE, export->export_id); 
-    /* Remove old export (if exists) */ 
+    snprintf(node, sizeof(node), "%s/%d", EXPORTS_NODE, export->export_id);
+    /* Remove old export (if exists) */
     xs_rm(xsh, xst, node);
 
-    if(!(xenbus_printf(xsh, xst, node, "name", "%s", export->name) &&
+	if(!(xenbus_printf(xsh, xst, node, "name", "%s", export->name) &&
          xenbus_printf(xsh, xst, node, "path", "%s", export->export_path)))
     {
         printf("Could not write the export node.\n");
         goto error_exit;
     }
 
-    xs_transaction_end(xsh, xst, 0);
-    return 0; 
+    /* People need to be able to read our export */
+    perms.id = 0;
+    perms.perms = XS_PERM_READ;
+    if(!xs_set_permissions(xsh, xst, EXPORTS_NODE, &perms, 1))
+    {
+        printf("Could not set permissions on the export node.\n");
+        goto error_exit;
+    }
 
-error_exit:    
+    snprintf(path, sizeof(path), "%s/%s", node, "path");
+    if(!xs_set_permissions(xsh, xst, path, &perms, 1))
+    {
+        printf("Could not set permissions on the path node.\n");
+        goto error_exit;
+    }
+
+    xs_transaction_end(xsh, xst, 0);
+    return 0;
+
+error_exit:
     if(xst != 0)
         xs_transaction_end(xsh, xst, 1);
     return -1;
@@ -147,14 +172,14 @@ void xenbus_read_mount_request(struct mount *mount)
 static int get_self_id(void)
 {
     char *dom_id;
-    int ret; 
-                
+    int ret;
+
     assert(xsh != NULL);
     dom_id = xs_read(xsh, XBT_NULL, "domid", NULL);
-    sscanf(dom_id, "%d", &ret); 
-                        
-    return ret;                                  
-} 
+    sscanf(dom_id, "%d", &ret);
+
+    return ret;
+}
 
 
 void xenbus_write_backend_node(struct mount *mount)
@@ -182,6 +207,7 @@ void xenbus_write_backend_ready(struct mount *mount)
     assert(xsh != NULL);
     self_id = get_self_id();
     sprintf(node, ROOT_NODE"/%d/state", mount->mount_id);
+    printf("backend ready: set %s to %s\n", node, STATE_READY);
     xs_write(xsh, XBT_NULL, node, STATE_READY, strlen(STATE_READY));
 }
 

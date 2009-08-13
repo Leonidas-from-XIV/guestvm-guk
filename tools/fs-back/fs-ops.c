@@ -67,6 +67,7 @@ extern int trace_level;
 static int check_exported_eqok(struct mount *mount, char * path, int eqok)
 {
     char *export_path = mount->export->export_path;
+	
     while (*export_path != '\0' && *path != '\0')
     {
         if (*export_path++ != *path++) return 0;
@@ -121,8 +122,10 @@ void dispatch_file_open(struct mount *mount, struct fsif_request *req)
     {
         fd = open(file_name, flags);
         if (trace_level >= TRACE_OPS) printf("Got FD: %d, errno %d\n", fd, errno);
-	if (fd < 0) fd = -errno;
-    }
+		if (fd < 0) fd = -errno;
+    } else {
+		printf("mount missmatch\n");	
+	}
     assert(xc_gnttab_munmap(mount->gnth, file_name, 1) == 0);
     /* We can advance the request consumer index, from here on, the request
      * should not be used (it may be overrinden by a response) */
@@ -280,7 +283,7 @@ void end_file_write(struct mount *mount, struct fs_request *priv_req)
 
 void dispatch_stat(struct mount *mount, struct fsif_request *req)
 {
-    struct fsif_stat_response *buf;
+    struct fsif_stat *buf;
     struct stat statbuf;
     int fd, type;
     int ret = -1;
@@ -320,13 +323,11 @@ void dispatch_stat(struct mount *mount, struct fsif_request *req)
             ret = stat(file_name, &statbuf);
         }
         if (ret >= 0) {
-            buf->stat_mode  = statbuf.st_mode;
-            buf->stat_uid   = statbuf.st_uid;
-            buf->stat_gid   = statbuf.st_gid;
-            buf->stat_size  = statbuf.st_size;
-            buf->stat_atime = statbuf.st_atime;
-            buf->stat_mtime = statbuf.st_mtime;
-            buf->stat_ctime = statbuf.st_ctime;
+		//	memcpy(buf, &statbuf, sizeof(statbuf));
+			buf->st_mode = statbuf.st_mode;
+			buf->st_size = statbuf.st_size;
+			buf->st_blksize = statbuf.st_blksize;
+			buf->st_blocks = statbuf.st_mode;
         }
     }
 
