@@ -83,6 +83,7 @@ EXTRA_DEPS = $(GUK_ROOT)/guk.mk \
 # Find all header files for checking dependencies.
 HDRS := $(wildcard $(GUK_ROOT)/include/*.h)
 HDRS += $(wildcard $(GUK_ROOT)/include/xen/*.h)
+HDRS += $(wildcard $(GUK_ROOT)/include/guk/*.h)
 HDRS += $(wildcard $(ARCH_INC)/*.h)
 # For special wanted header directories.
 extra_heads := $(foreach dir,$(EXTRA_INC),$(wildcard $(dir)/*.h))

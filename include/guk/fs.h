@@ -39,17 +39,17 @@
 #define __FS_H__
 
 #include <guk/os.h>
-#include <fsif.h>
+#include <types.h>
 #include <list.h>
+#include <fsif.h>
 
 #define FSTEST_CMDLINE   "fstest"
 
-struct fs_import 
-{
+struct fs_import {
     domid_t dom_id;                 /* dom id of the exporting domain       */ 
-    u16 export_id;                  /* export id (exporting dom specific)   */
+    uint16_t export_id;                  /* export id (exporting dom specific)   */
     char *path;                     /* path of exported fs */             
-    u16 import_id;                  /* import id (specific to this domain)  */ 
+    uint16_t import_id;                  /* import id (specific to this domain)  */ 
     struct list_head list;          /* list of all imports                  */
     unsigned int nr_entries;        /* Number of entries in rings & request
                                        array                                */
@@ -61,35 +61,24 @@ struct fs_import
     unsigned short *freelist;       /* List of free request ids             */
 };
 
-void init_fs_frontend(int fstest);
 
-int guk_fs_open(struct fs_import *import, char *file, int flags);
-int guk_fs_close(struct fs_import *import, int fd);
-size_t guk_fs_read(struct fs_import *import, int fd, void *buf, 
-               ssize_t len, ssize_t offset);
-ssize_t guk_fs_write(struct fs_import *import, int fd, void *buf, 
-                 ssize_t len, ssize_t offset);
-int guk_fs_fstat(struct fs_import *import, 
-            int fd, 
-            struct fsif_stat_response *stat);
-int guk_fs_stat(struct fs_import *import, 
-            char *file, 
-            struct fsif_stat_response *stat);
-int guk_fs_truncate(struct fs_import *import, 
-                int fd, 
-                int64_t length);
-int guk_fs_remove(struct fs_import *import, char *file);
-int guk_fs_rename(struct fs_import *import, 
-              char *old_file_name, 
-              char *new_file_name);
-int guk_fs_create(struct fs_import *import, char *name, 
-              int8_t directory, int32_t mode);
-char** guk_fs_list(struct fs_import *import, char *name, 
-               int32_t offset, int32_t *nr_files, int *has_more);
-int guk_fs_chmod(struct fs_import *import, int fd, int32_t mode);
-int64_t guk_fs_space(struct fs_import *import, char *location);
-int guk_fs_sync(struct fs_import *import, int fd);
+int     guk_fs_open(struct fs_import *, const char *file, int flags);
+int     guk_fs_close(struct fs_import *, int fd);
+ssize_t guk_fs_read(struct fs_import *, int fd, void *buf, ssize_t len, ssize_t offset);
+ssize_t guk_fs_write(struct fs_import *, int fd, const void *buf, ssize_t len, ssize_t offset);
+int     guk_fs_fstat(struct fs_import *, int fd, struct fsif_stat *buf);
+int     guk_fs_stat(struct fs_import *, const char *file, struct fsif_stat *buf);
+int     guk_fs_truncate(struct fs_import *, int fd, int64_t length);
+int     guk_fs_remove(struct fs_import *, char *file);
+int     guk_fs_rename(struct fs_import *, char *old_file_name, char *new_file_name);
+int     guk_fs_create(struct fs_import *, char *name, int8_t directory, int32_t mode);
+int     guk_fs_fchmod(struct fs_import *, int fd, int32_t mode);
+int64_t guk_fs_space(struct fs_import *, char *location);
+int     guk_fs_sync(struct fs_import *, int fd);
+char**  guk_fs_list(struct fs_import *, char *name, int32_t offset, int32_t *nr_files, int *has_more);
+char*   guk_fs_import_path(struct fs_import *);
 
 struct list_head *guk_fs_get_imports(void);
+struct fs_import *guk_fs_get_next(struct fs_import *);
 
 #endif
