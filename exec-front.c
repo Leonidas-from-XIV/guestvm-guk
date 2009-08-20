@@ -242,7 +242,6 @@ int guk_exec_read_bytes(int this_exec_id_fd, char *buffer, int length, long file
   err = xenbus_read(XBT_NIL, nodename, &bytes);
   if (err) {
     printk("xenbus_read %s returned err %s\n", nodename, err);
-    while (1) sleep(WAIT_PERIOD);
     free(err);
     return -EIO;
   }
