@@ -94,5 +94,7 @@ int xenbus_read_integer(char *path);
 char* xenbus_printf(xenbus_transaction_t xbt,
                                   char* node, char* path,
                                   char* fmt, ...);
+/* get this domain's id */
+domid_t xenbus_get_self_id(void);
 
 #endif /* XENBUS_H__ */

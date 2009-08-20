@@ -948,6 +948,16 @@ void xenbus_resume(void)
     wake_up(&req_wq);
 }
 
+domid_t xenbus_get_self_id(void)
+{
+    char *dom_id;
+    domid_t ret;
+
+    BUG_ON(xenbus_read(XBT_NIL, "domid", &dom_id));
+    sscanf(dom_id, "%d", &ret);
+
+    return ret;
+}
 /*
  * Local variables:
  * mode: C
