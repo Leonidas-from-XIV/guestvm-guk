@@ -125,54 +125,15 @@ void xencons_tx(void)
 }
 
 
-/* Output data needs to be encoded by adding '\r' after each '\n' */
-#define CONS_BUFF_SIZE  1024
-static char *encode_printout(char *data, int *length)
-{
-    static char encoded[CONS_BUFF_SIZE];
-    int orig_idx, enc_idx;
-
-    for(orig_idx=0, enc_idx=0;
-        (orig_idx < *length) && (enc_idx < CONS_BUFF_SIZE - 1);
-        orig_idx++, enc_idx++)
-    {
-        BUG_ON(enc_idx >= CONS_BUFF_SIZE);
-        encoded[enc_idx] = data[orig_idx];
-        if(data[orig_idx] == '\n')
-        {
-            enc_idx++;
-            BUG_ON(enc_idx >= CONS_BUFF_SIZE);
-            encoded[enc_idx] = '\r';
-        }
-    }
-    /* If the printk's are too long, print a message notyfing the user that we
-     * cannot handle it */
-    if(orig_idx < *length)
-    {
-        char *too_long = "[printk too long: increase CONS_BUFF_SIZE]\n\r";
-
-        strcpy(encoded + enc_idx - strlen(too_long), too_long);
-        BUG_ON(!((enc_idx == CONS_BUFF_SIZE - 1) ||
-               (enc_idx == CONS_BUFF_SIZE)));
-    }
-
-    *length = enc_idx;
-
-    return encoded;
-}
-
-
 static char *init_overflow =
     "[BUG: too much printout before console is initialised!]\n\r";
 void console_print(char *data, int length)
 {
-    char *encoded;
     int printed;
 
     if(console_dying)
         return;
 
-    encoded = encode_printout(data, &length);
     if(!console_initialised &&
         (xencons_ring_avail() - length < strlen(init_overflow)))
     {
@@ -188,11 +149,11 @@ void console_print(char *data, int length)
 #ifdef SPINNING_CONSOLE
 again:
 #endif
-    printed = xencons_ring_send_fn(encoded, length);
+    printed = xencons_ring_send_fn(data, length);
 #ifdef SPINNING_CONSOLE
     if(printed != length)
     {
-        encoded += printed;
+        data += printed;
         length -= printed;
         goto again;
     }
