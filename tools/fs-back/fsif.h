@@ -140,6 +140,9 @@ struct fsif_stat {
 	int    st_size;    /* total size, in bytes */
 	int    st_blksize; /* blocksize for filesystem I/O */
 	int    st_blocks;  /* number of blocks allocated */
+        int64_t  st_atim;
+        int64_t  st_mtim;
+        int64_t  st_ctim;
 };
 
 /* FS operation request */

@@ -71,6 +71,15 @@ int trace_level = 1;
 struct request *active_requests[MAX_ACTIVE_REQUESTS];
 static int active_request_index = 0;
 
+/* read/close request encode the fd in the request id */
+static int exec_request_id(int request_id) {
+  return (request_id / 3) * 3;
+}
+
+static int fd_from_request_id(int request_id) {
+  return request_id % 3;
+}
+
 static struct request *find_request(int dom_id, int request_id) {
   int i;
   for (i = 0; i < MAX_ACTIVE_REQUESTS; i++) {
@@ -160,12 +169,16 @@ read_fully(int fd, void *buf, size_t nbyte)
     }
 }
 
-void write_status(struct request *request, char *kind) {
+void write_status_id(struct request *request, char *kind, int request_id) {
   char node[1024];
   char kindstatus[32];
   sprintf(kindstatus, "%s%s", kind, "status");
-  sprintf(node, FRONTEND_NODE, request->dom_id, request->request_id);
+  sprintf(node, FRONTEND_NODE, request->dom_id, request_id);
   xenbus_printf(xsh, XBT_NULL, node, kindstatus, "%d", request->status);
+}
+
+void write_status(struct request *request, char *kind) {
+  write_status_id(request, kind, request->request_id);
 }
 
 void do_exec_request(struct request *request, int argc, char **argv, char *wdir) {
@@ -353,43 +366,42 @@ static void handle_wait_request(struct request *request) {
     request->pid = -1;
 }
 
-static void handle_read_request(struct request *request) {
+static void handle_read_request(struct request *request, int request_id) {
     char node[1024];
     char *read_info;
-    int fd, length, file_offset;
+    int fd, rfd, length, file_offset;
     char buffer[81];
     int result;
 
-    sprintf(node, READ_REQUEST_NODE, request->dom_id, request->request_id);
+    /* the request_id encodes the exec_id and the fd */
+    sprintf(node, READ_REQUEST_NODE, request->dom_id, request_id);
     read_info = xs_read(xsh, XBT_NULL, node, NULL);
-    sscanf(read_info, "%u,%u,%u", &fd, &length, &file_offset);
-    fd = request->stdio[fd];
-    printf("Read %u,%u,%u\n", fd, length, file_offset);
+    sscanf(read_info, "%u,%u", &length, &file_offset);
+    fd = fd_from_request_id(request_id);
+    rfd = request->stdio[fd];
+    printf("Read %u[%u],%u,%u\n", fd, rfd, length, file_offset);
     /* we limit reads to max(length, 80) */
     if (length > 80) length = 80;
-    result = read_fully(fd, buffer, length);
+    result = read_fully(rfd, buffer, length);
     request->status = result < 0 ? -errno : 0;
     if (result >= 0) {
       buffer[result] = '\0';
-      sprintf(node, FRONTEND_NODE, request->dom_id, request->request_id);
+      sprintf(node, FRONTEND_NODE, request->dom_id, request_id);
       xenbus_printf(xsh, XBT_NULL, node, "readbytes", "%s", buffer);
     }
-    write_status(request, "read");
+    write_status_id(request, "read", request_id);
 }
 
-static void handle_close_request(struct request *request) {
-    char node[1024];
+static void handle_close_request(struct request *request, int request_id) {
     char *close_info;
     int fd, rfd, result;
-    sprintf(node, CLOSE_REQUEST_NODE, request->dom_id, request->request_id);
-    close_info = xs_read(xsh, XBT_NULL, node, NULL);
-    sscanf(close_info, "%u", &fd);
+    fd = fd_from_request_id(request_id);
     rfd = request->stdio[fd];
-    printf("Close %u=%u\n", fd, rfd);
+    printf("Close %u[%u]\n", fd, rfd);
     result = safe_close(rfd);
     request->stdio[fd] = -1;
     request->status = result < 0 ? -errno : 0;
-    write_status(request, "close");
+    write_status_id(request, "close", request_id);
 }
 
 static void handle_destroy_request(struct request *request) {
@@ -426,7 +438,7 @@ static void handle_connection(int dom_id, int request_id, char *rkind)
     struct request *request;
     pthread_t handling_thread;
 
-    if (trace_level >= TRACE_OPS) printf("Handling request %s from dom=%d\n", rkind, dom_id);
+    if (trace_level >= TRACE_OPS) printf("Handling '%s' request from dom_id=%d, request_id %d\n", rkind, dom_id, request_id);
 
 
     if (strcmp(rkind, "exec") == 0) {
@@ -453,17 +465,17 @@ static void handle_connection(int dom_id, int request_id, char *rkind)
       //free(request);
       //active_requests[request->slot] = NULL;
     } else if (strcmp(rkind, "read") == 0) {
-      request = check_find_request(dom_id, request_id, rkind);
+      request = check_find_request(dom_id, exec_request_id(request_id), rkind);
       if (request == NULL) {
 	return;
       }      
-      handle_read_request(request);
+      handle_read_request(request, request_id);
     } else if (strcmp(rkind, "close") == 0) {
-      request = check_find_request(dom_id, request_id, rkind);
+      request = check_find_request(dom_id, exec_request_id(request_id), rkind);
       if (request == NULL) {
 	return;
       }
-      handle_close_request(request);
+      handle_close_request(request, request_id);
     } else if (strcmp(rkind, "destroy") == 0) {
       request = check_find_request(dom_id, request_id, rkind);
       if (request == NULL) {

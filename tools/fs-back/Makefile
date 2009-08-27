@@ -75,6 +75,9 @@ fs-backend: $(OBJS) fs-backend.c
 install: all
 	$(INSTALL_PROG) $(IBIN) $(DESTDIR)$(INST_DIR)
 
+%.E: %.c 
+	$(CC) $(CFLAGS) $(CPPFLAGS) -E $< -o $@
+
 clean:
 	rm -rf *.o *~ $(DEPS) xen $(IBIN) $(LIB)
 

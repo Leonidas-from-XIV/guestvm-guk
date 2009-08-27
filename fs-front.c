@@ -419,6 +419,9 @@ static int fs_xstat(struct fs_import *import,
 	stat_buf->st_size = buf->st_size;
 	stat_buf->st_blksize = buf->st_blksize;
 	stat_buf->st_blocks = buf->st_mode;
+	stat_buf->st_atim = buf->st_atim;
+	stat_buf->st_mtim = buf->st_mtim;
+	stat_buf->st_ctim = buf->st_ctim;
 
     add_id_to_freelist(priv_req_id, import->freelist);
 

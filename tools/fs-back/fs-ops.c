@@ -328,6 +328,9 @@ void dispatch_stat(struct mount *mount, struct fsif_request *req)
 			buf->st_size = statbuf.st_size;
 			buf->st_blksize = statbuf.st_blksize;
 			buf->st_blocks = statbuf.st_mode;
+			buf->st_atim = statbuf.st_atime;
+			buf->st_mtim = statbuf.st_mtime;
+			buf->st_ctim = statbuf.st_ctime;
         }
     }
 

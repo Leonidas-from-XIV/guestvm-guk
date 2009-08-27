@@ -29,7 +29,7 @@
  * designated nationals lists is strictly prohibited.
  * 
  */
-/******************************************************************************
+ /*
  *
  * Frontend for exec (remote process/guest creation) 
  *
@@ -88,6 +88,7 @@ static int wait_for_status(int this_exec_id, int statuskind) {
   int result = -EAGAIN;
   int retry = MAX_WAIT;
   char *statuskindname = status_strings[statuskind];
+  /* This string must be unique to this operation */
   sprintf(nodename, "/local/domain/%d/device/exec/%d/%s", self_id, this_exec_id, statuskindname);
   while (retry > 0) {
     err = xenbus_read(XBT_NIL, nodename, &status);
@@ -205,40 +206,23 @@ void guk_exec_destroy(int this_exec_id) {
   wait_for_status(this_exec_id, DESTROY_STATUS);
 }
 
-int guk_exec_close(int this_exec_id_fd) {
-  char nodename[1024];
-  char *err;
-  int result;
-  int this_exec_id = this_exec_id_fd / 3;
-  int fd = this_exec_id_fd % 3;
-  sprintf(nodename, "/local/domain/0/backend/exec/requests/%d/%d", self_id, this_exec_id);
-  err = xenbus_printf(XBT_NIL, nodename, "close", "%u", fd);
-  if (err) {
-    free(err);
-    return -EIO;
-  }
-  
-  result = wait_for_status(this_exec_id, CLOSE_STATUS);
-  return result;
-}
-
+/* this_exec_id_fd encodes both the exec_id and the file descriptor we are reading on.
+ */
 int guk_exec_read_bytes(int this_exec_id_fd, char *buffer, int length, long file_offset) {
   char nodename[1024];
   char *err, *bytes;
-  int this_exec_id = this_exec_id_fd / 3;
-  int fd = this_exec_id_fd % 3;
   int status, result;
-  sprintf(nodename, "/local/domain/0/backend/exec/requests/%d/%d", self_id, this_exec_id);
-  err = xenbus_printf(XBT_NIL, nodename, "read", "%u,%u,%u", fd, length, file_offset);
+  sprintf(nodename, "/local/domain/0/backend/exec/requests/%d/%d", self_id, this_exec_id_fd);
+  err = xenbus_printf(XBT_NIL, nodename, "read", "%u,%u", length, file_offset);
   if (err) {
     free(err);
     return -EIO;
   }
-  status = wait_for_status(this_exec_id, READ_STATUS);
+  status = wait_for_status(this_exec_id_fd, READ_STATUS);
   if (status < 0) {
     return status;
   }
-  sprintf(nodename, "/local/domain/%d/device/exec/%d/%s", self_id, this_exec_id, "readbytes");
+  sprintf(nodename, "/local/domain/%d/device/exec/%d/%s", self_id, this_exec_id_fd, "readbytes");
   err = xenbus_read(XBT_NIL, nodename, &bytes);
   if (err) {
     printk("xenbus_read %s returned err %s\n", nodename, err);
@@ -249,6 +233,23 @@ int guk_exec_read_bytes(int this_exec_id_fd, char *buffer, int length, long file
   BUG_ON(err);
   result = strlen(bytes);
   strcpy(buffer, bytes);
+  return result;
+}
+
+/* this_exec_id_fd encodes both the exec_id and the file descriptor we closing.
+ */
+int guk_exec_close(int this_exec_id_fd) {
+  char nodename[1024];
+  char *err;
+  int result;
+  sprintf(nodename, "/local/domain/0/backend/exec/requests/%d/%d/close", self_id, this_exec_id_fd);
+  err = xenbus_write(XBT_NIL, nodename, "");
+  if (err) {
+    free(err);
+    return -EIO;
+  }
+  
+  result = wait_for_status(this_exec_id_fd, CLOSE_STATUS);
   return result;
 }
 
@@ -312,3 +313,4 @@ USED static int init_func(void)
 	return 0;
 }
 DECLARE_INIT(init_func);
+
