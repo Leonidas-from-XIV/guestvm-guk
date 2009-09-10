@@ -120,13 +120,17 @@ int guk_exec_create(char *prog, char *arg_block, int argc, char *dir, int *fds) 
     char nodename[1024];
     char a_nodename[1024];
     char r_nodename[1024];
-    char argn[2];
+    char argn[4];
     int i;
     int result;
     int this_exec_id = exec_id;
      
     if (!exec_init) {
       return -ENODEV;
+    }
+
+    if (argc > 999) {
+      return -E2BIG;
     }
 
     /* exec_id .. exec_id + 2 is used to encode the file descriptor for read */
@@ -150,11 +154,11 @@ again:
 
     argn[0] = '1'; argn[1] = '\0';
     for (i = 1; i <= argc; i++) {
+      sprintf(argn, "%d", i);
       err = xenbus_printf(xbt, a_nodename, argn, "%s", arg_block);
       if (check(err)) goto abort_transaction;
       while (*arg_block) arg_block++;
       arg_block++;
-      argn[0]++;
     }
     check(xenbus_transaction_end(xbt, 0, &retry));
     if (retry) {
