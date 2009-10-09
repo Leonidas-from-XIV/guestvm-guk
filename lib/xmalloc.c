@@ -128,26 +128,26 @@ static void *xmalloc_new_page(size_t size)
     return hdr+1;
 }
 
-/* Big object?  Just use the page allocator. */
-static void *xmalloc_whole_pages(size_t size)
-{
-    struct xmalloc_hdr *hdr;
-    unsigned int pageorder = get_order(size);
-
-    hdr = (struct xmalloc_hdr *)alloc_pages(pageorder);
-        if ( hdr == NULL )
-        return NULL;
-
-    hdr->size = (1 << (pageorder + PAGE_SHIFT));
-    /* Debugging aid. */
-    hdr->freelist.next = hdr->freelist.prev = NULL;
-    return hdr+1;
-}
-
 /* Return size, increased to alignment with align. */
 static inline size_t align_up(size_t size, size_t align)
 {
     return (size + align - 1) & ~(align - 1);
+}
+
+/* Big object?  Just use the page allocator. */
+static void *xmalloc_whole_pages(size_t size)
+{
+    struct xmalloc_hdr *hdr;
+    size_t asize = align_up(size, PAGE_SIZE);
+
+    hdr = (struct xmalloc_hdr *)guk_allocate_pages(asize / PAGE_SIZE, DATA_VM);
+        if ( hdr == NULL )
+        return NULL;
+
+    hdr->size = asize;
+    /* Debugging aid. */
+    hdr->freelist.next = hdr->freelist.prev = NULL;
+    return hdr+1;
 }
 
 void *guk_xmalloc(size_t asize, size_t align)
@@ -235,7 +235,7 @@ void guk_xfree(const void *p)
     /* Big allocs free directly. */
     if ( hdr->size >= PAGE_SIZE )
     {
-        free_pages(hdr, get_order(hdr->size));
+        guk_deallocate_pages(hdr, hdr->size / PAGE_SIZE, DATA_VM);
         //print_free_list("xfree return whole");
         goto done;
     }
