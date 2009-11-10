@@ -42,13 +42,14 @@ GCC_INCLUDE:=${GCC_BASE}install-tools/include
 endif
 
 ifeq ($(XEN_OS),Linux)
-GCC_INCLUDE:=${GCC_BASE}include
+GCC_INCLUDE:=-I${GCC_BASE}include
+GCC_INCLUDE+=-I${GCC_BASE}include-fixed
 endif
 
 # Define some default flags.
 # NB. '-Wcast-qual' is nasty, so I omitted it.
 # use -nostdinc to avoid name clashes, but include gcc standard headers
-DEF_CFLAGS := -fno-builtin -nostdinc -I$(GCC_INCLUDE)
+DEF_CFLAGS := -fno-builtin -nostdinc $(GCC_INCLUDE)
 DEF_CFLAGS += $(call cc-option,$(CC),-fno-stack-protector,)
 DEF_CFLAGS += -Wall -Werror -Wredundant-decls -Wno-format
 DEF_CFLAGS += -Wstrict-prototypes -Wnested-externs -Wpointer-arith -Winline

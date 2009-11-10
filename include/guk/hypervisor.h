@@ -52,6 +52,10 @@
 #error "Unsupported architecture"
 #endif
 
+#ifndef MAX_VIRT_CPUS
+#define MAX_VIRT_CPUS 64
+#endif
+
 /*
  * a placeholder for the start of day information passed up from the hypervisor
  */
