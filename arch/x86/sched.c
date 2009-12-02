@@ -160,16 +160,15 @@ struct thread* arch_create_thread(char *name,
     {
         thread->stack = (char *)stack;
         thread->guk_stack_allocated = 0;
-        thread->specific = data;
         thread->stack_size = stack_size;
     }
     else
     {
         thread->stack = (char *)alloc_pages(STACK_SIZE_PAGE_ORDER);
         thread->guk_stack_allocated = 1;
-        thread->specific = NULL;
         thread->stack_size = STACK_SIZE;
     }
+    thread->specific = NULL;
     thread->name = name;
     thread->sp = (unsigned long)thread->stack + thread->stack_size;
 

@@ -469,8 +469,12 @@ static void wake_joiners(struct thread *joinee)
     }
 }
 
-__attribute__((weak)) void guk_free_thread_stack(void *specific, void *stack, unsigned long stack_size) {
-    crash_exit_msg("dummy free_thread_stack called!");
+__attribute__((weak)) void guk_free_thread_stack(void *stack, unsigned long stack_size) {
+    crash_exit_msg("dummy guk_free_thread_stack called!");
+}
+
+__attribute__((weak)) void guk_invoke_destroy(void *specific) {
+    crash_exit_msg("dummy guk_invoke_destroy called!");
 }
 
 /*
@@ -497,7 +501,7 @@ static void reap_dead(void)
 		if (thread->guk_stack_allocated)
 		    free_pages(thread->stack, STACK_SIZE_PAGE_ORDER);
 		else {
-		    guk_free_thread_stack(thread->specific, thread->stack, thread->stack_size);
+		    guk_free_thread_stack(thread->stack, thread->stack_size);
 		}
 
 		del_thread_list(thread);
@@ -552,7 +556,7 @@ static inline struct thread *pick_thread(struct thread *prev, int cpu)
 	if(++i > thread_id) { /* if ready queue is corrupted we hang in this loop; 
 				 try to break out and raise a BUG */
 	    spin_unlock_irqrestore(&ready_lock, flags);
-	    print_queues();
+    print_queues();
 	    BUG();
 	}
 	thread = list_entry(t, struct thread, ready_list);
@@ -873,7 +877,7 @@ struct thread* create_idle_thread(unsigned int cpu)
     thread->appsched_id = -1;
     INIT_LIST_HEAD(&thread->joiners);
     thread->id = cpu;
-    if (trace_sched() || trace_mm())
+    if (trace_sched() || trace_startup() || trace_mm())
         ttprintk("CT %d %s %d %x %lx\n", thread->id, buf, thread->cpu, thread->flags, thread->sp);
     set_running(thread);
 
@@ -885,7 +889,7 @@ void exit_thread(void)
     struct thread *thread = current;
 
     /* The synchronisation works as following:
-     *  - exit_thread is allways executed by current, it must therefore be the
+     *  - exit_thread is always executed by current, it must therefore be the
      *    case that RUNNING_FLAG is set. This guarantees that no other CPU will
      *    schedule us in the process,
      *  - we disable preemption, so that we can complete the whole process
@@ -904,6 +908,11 @@ void exit_thread(void)
      */
     preempt_disable();
     BUG_ON(!is_running(thread));
+    if (!is_ukernel(thread)) {
+        /* implementation specific destroy code */
+        guk_invoke_destroy(thread->specific);
+    }
+
     block(thread);
 
     if (trace_sched() || trace_startup()) ttprintk("TX %d\n", thread->id);
