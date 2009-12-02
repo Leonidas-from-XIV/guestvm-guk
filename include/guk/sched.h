@@ -251,7 +251,6 @@ void print_sleep_queue_specific(int all, printk_function_ptr printk_function);
 void print_sched_stats(void);
 struct thread *guk_current(void);
 int guk_current_id(void);
-extern void free_thread_stack(void *specific, void *stack, unsigned long stack_size);
 
 #define PREEMPT_ACTIVE     0x10000000
 #define IRQ_ACTIVE         0x00100000
