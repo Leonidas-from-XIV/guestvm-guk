@@ -832,6 +832,7 @@ static int blk_resume(void)
 	snprintf(xenbus_path, MAX_PATH, "%s/state", dev->backend);
 	xenbus_watch_path(XBT_NIL, xenbus_path, "blk-front");
 	xenbus_wait_for_value("blk-front", xenbus_path, "4"); /* wait for backend connection */
+	xenbus_rm_watch("blk-front");
 
 	post_connect(dev);
 	retval = 0;
