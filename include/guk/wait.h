@@ -80,7 +80,8 @@ static inline void init_waitqueue_entry(struct wait_queue *q, struct thread *thr
 static inline void add_wait_queue(struct wait_queue_head *h, struct wait_queue *q)
 /* Must be called with the queue head lock held */
 {
-    list_add_tail(&q->thread_list, &h->thread_list);
+    if (list_empty(&q->thread_list))
+        list_add_tail(&q->thread_list, &h->thread_list);
 }
 
 static inline void remove_wait_queue(struct wait_queue *q)
@@ -115,6 +116,13 @@ static inline void wake_up(struct wait_queue_head *head)
     add_wait_queue(&wq, &w);                  \
     block(current);                           \
     spin_unlock_irqrestore(&wq.lock, flags);  \
+} while (0)
+
+#define remove_waiter(w) do {   \
+    unsigned long flags;        \
+    local_irq_save(flags);      \
+    remove_wait_queue(&w);      \
+    local_irq_restore(flags);   \
 } while (0)
 
 #define wait_event(wq, condition) do{             \

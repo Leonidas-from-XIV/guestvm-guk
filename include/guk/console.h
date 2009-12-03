@@ -73,15 +73,12 @@ void guk_printk(const char *fmt, ...);
 void guk_xprintk(const char *fmt, ...);
 void guk_cprintk(int direct, const char *fmt, va_list args);
 void guk_printbytes(char *buf, int length);
+int guk_console_readbytes(char *data, unsigned len);
 
 #define printk guk_printk
 #define xprintk guk_xprintk
 #define cprintk guk_cprintk
 #define printbytes guk_printbytes
-
-
-void xencons_rx(char *buf, unsigned len);
-void xencons_tx(void);
 
 void init_console(void);
 void console_suspend(void);

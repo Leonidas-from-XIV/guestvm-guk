@@ -36,18 +36,21 @@
 #include <guk/events.h>
 #include <guk/xenbus.h>
 #include <guk/smp.h>
+#include <guk/wait.h>
 
 #include <xen/io/console.h>
 
 #include <lib.h>
 #include <types.h>
 
+DECLARE_WAIT_QUEUE_HEAD(console_queue);
+
 static inline struct xencons_interface *xencons_interface(void)
 {
     return mfn_to_virt(start_info.console.domU.mfn);
 }
 
-static inline void notify_daemon(void)
+void xencons_notify_daemon(void)
 {
     /* Use evtchn: this is called early, before irq is set up. */
     notify_remote_via_evtchn(start_info.console.domU.evtchn);
@@ -56,8 +59,14 @@ static inline void notify_daemon(void)
 int xencons_ring_avail(void)
 {
     struct xencons_interface *intf = xencons_interface();
+    XENCONS_RING_IDX cons, prod;
 
-    return sizeof(intf->out) - intf->out_prod + intf->out_cons;
+    cons = intf->in_cons;
+    prod = intf->in_prod;
+    mb();
+    BUG_ON((prod - cons) > sizeof(intf->in));
+
+    return prod - cons;
 }
 
 int xencons_ring_send_no_notify(const char *data, unsigned len)
@@ -83,7 +92,7 @@ int xencons_ring_send(const char *data, unsigned len)
 {
     int sent;
     sent = xencons_ring_send_no_notify(data, len);
-    notify_daemon();
+    xencons_notify_daemon();
 
     return sent;
 }	
@@ -92,32 +101,38 @@ int xencons_ring_send(const char *data, unsigned len)
 
 static void handle_input(evtchn_port_t port, void *ign)
 {
+        //xprintk("wake_up\n");
+        wake_up(&console_queue);
+}
+
+int xencons_ring_recv(char *data, unsigned len)
+{
 	struct xencons_interface *intf = xencons_interface();
 	XENCONS_RING_IDX cons, prod;
+        unsigned filled = 0;
 
 	cons = intf->in_cons;
 	prod = intf->in_prod;
 	mb();
 	BUG_ON((prod - cons) > sizeof(intf->in));
 
-	while (cons != prod) {
-		xencons_rx(intf->in+MASK_XENCONS_IDX(cons,intf->in), 1);
-		cons++;
+        while (filled < len && cons + filled != prod) {
+                data[filled] = *(intf->in + MASK_XENCONS_IDX(cons + filled, intf->in));
+                filled++;
 	}
 
 	mb();
-	intf->in_cons = cons;
+        intf->in_cons = cons + filled;
 
-	notify_daemon();
+	xencons_notify_daemon();
 
-	xencons_tx();
+        return filled;
 }
 
 int xencons_ring_init(void)
 {
 	int err;
 
-//xprintk("xencons_ring_init 1\n");
 	if (!start_info.console.domU.evtchn)
 		return 0;
 
@@ -129,10 +144,9 @@ int xencons_ring_init(void)
 		xprintk("XEN console request chn bind failed %i\n", err);
 		return err;
 	}
-//xprintk("xencons_ring_init 2\n");
 
 	/* In case we have in-flight data after save/restore... */
-	notify_daemon();
+	xencons_notify_daemon();
 
 	return 0;
 }

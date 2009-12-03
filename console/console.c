@@ -72,94 +72,102 @@
 #include <guk/xenbus.h>
 #include <guk/trace.h>
 #include <guk/blk_front.h>
+#include <guk/sched.h>
+#include <guk/arch_sched.h>
 
 #include <xen/io/console.h>
 
 #include <lib.h>
 #include <types.h>
 
-/* Copies all print output to the Xen emergency console apart
-   of standard dom0 handled console */
-#define USE_XEN_CONSOLE
-
-/* If SPINNING_CONSOLE is defined guestvm-ukernel will busy-wait for Dom0 to make space
- * in the console ring. Bad for performance, good for debugging */
-#define SPINNING_CONSOLE
-
 /* Low level functions defined in xencons_ring.c */
 extern int xencons_ring_init(void);
 extern int xencons_ring_send(const char *data, unsigned len);
 extern int xencons_ring_send_no_notify(const char *data, unsigned len);
 extern int xencons_ring_avail(void);
+extern struct wait_queue_head console_queue;
+extern int xencons_ring_recv(char *data, unsigned len);
+extern void xencons_notify_daemon(void);
 
-
-/* If console not initialised the printk will be sent to xen (and then to serial
- * line if Xen is built with "verbose" enabled, see: Config.mk & xen/Rules.mk).
- *
- * As soon as the console is initialised the same printout will appear in Dom0
- * too (Dom0 will be notified of the presence of console data).
- */
 static int console_initialised = 0;
 static int console_dying = 0;
 static int (*xencons_ring_send_fn)(const char *data, unsigned len) =
                     xencons_ring_send_no_notify;
 static DEFINE_SPINLOCK(xencons_lock);
 
-void xencons_rx(char *buf, unsigned len)
-{
-    if(len > 0)
-    {
-        /* Just repeat what's written */
-        buf[len] = '\0';
-        printk("%s", buf);
+static char *init_overflow =
+    "[BUG: too much printout before console is initialised!]\r\n";
 
-        if(buf[len-1] == '\r') {
-	    print_runqueue();
-	}
+/* We really don't want to lost any console output, so we busy wait
+   if the ring is full. No doubt we could, with more effort, arrange to
+   wait for an event indicating that the ring had space, but does it matter?
+*/
+static void checked_print(char *data, int length) {
+    int printed = 0;
+
+    while (length > 0) {
+      printed = xencons_ring_send_fn(data, length);
+      data += printed;
+      length -= printed;
     }
 }
 
-void xencons_tx(void)
+/* Prints to the dom0 console. */
+static void console_print(char *data, int length)
 {
-    /* Do nothing, handled by _rx */
-}
+    char *curr_char, saved_char;
+    int part_len;
 
-
-static char *init_overflow =
-    "[BUG: too much printout before console is initialised!]\n\r";
-void console_print(char *data, int length)
-{
-    int printed;
-
-    if(console_dying)
+    if (console_dying) {
+        /* suppress further output */
         return;
+    }
 
+    /* If the console is not initialized and the ring is full we crash */
     if(!console_initialised &&
         (xencons_ring_avail() - length < strlen(init_overflow)))
     {
         console_dying = 1;
-#ifndef USE_XEN_CONSOLE
         (void)HYPERVISOR_console_io(CONSOLEIO_write,
                                     strlen(init_overflow),
                                     init_overflow);
-#endif
         xencons_ring_send(init_overflow, strlen(init_overflow));
         BUG();
     }
-#ifdef SPINNING_CONSOLE
-again:
-#endif
-    printed = xencons_ring_send_fn(data, length);
-#ifdef SPINNING_CONSOLE
-    if(printed != length)
-    {
-        data += printed;
-        length -= printed;
-        goto again;
+
+    /* Evidently we do need to convert \n into \r\n, although it seems only needed
+       for some terminal environments. Here we search for embedded \n chars, leaving
+       any trailing \n until later.
+     */
+    for(curr_char = data; curr_char < data+length-1; curr_char++) {
+        if (*curr_char == '\n') {
+            saved_char = *(curr_char+1);
+	    *curr_char = '\r';
+            *(curr_char+1) = '\n';
+            part_len = curr_char - data + 2;
+            checked_print(data, part_len);
+            *(curr_char+1) = saved_char;
+	    *curr_char = '\n';
+            data = curr_char+1;
+            length -= part_len - 1;
+        }
     }
-#endif
+    
+    /* At this point, either there we no embedded \n chars or we have printed
+     * everything except the characters after the last \n we found. Note, therefore,
+     * that there still may be a trailing \n that has to be dealth with.
+     */
+
+    if(data[length-1] == '\n') {
+      checked_print(data, length - 1);
+      checked_print("\r\n", 2);
+    } else {
+      checked_print(data, length);
+    }
+
 }
 
+/* Atomic print to dom0 console. */
 void guk_printbytes(char *buf, int length)
 {
     unsigned long flags;
@@ -168,41 +176,42 @@ void guk_printbytes(char *buf, int length)
     spin_unlock_irqrestore(&xencons_lock, flags);
 }
 
-/* Prints string to Dom0 ring and optionally to Xen emergency console */
-void guk_cprintk(int direct, const char *fmt, va_list args)
+/* Prints either to the hypervisor console or the dom0 console,
+ * depending on tohyp. Output to dom0 console is atomic.
+ */
+void guk_cprintk(int tohyp, const char *fmt, va_list args)
 {
     static char   buf[1024];
     unsigned long flags;
     int err;
 
     flags = 0;
-    if(!direct)
+    if (!tohyp) {
         spin_lock_irqsave(&xencons_lock, flags);
+    }
     err = vsnprintf(buf, sizeof(buf), fmt, args);
 
-    if(direct)
-    {
+    if (tohyp) {
         (void)HYPERVISOR_console_io(CONSOLEIO_write, strlen(buf), buf);
-        return;
     } else {
-#ifndef USE_XEN_CONSOLE
-	if(!console_initialised)
-	    (void)HYPERVISOR_console_io(CONSOLEIO_write, strlen(buf), buf);
-#endif
         console_print(buf, strlen(buf));
     }
-    if(!direct)
+
+    if(!tohyp) {
         spin_unlock_irqrestore(&xencons_lock, flags);
+    }
 }
 
+/* Prints to the dom0 console */
 void guk_printk(const char *fmt, ...)
 {
     va_list       args;
     va_start(args, fmt);
-    cprintk(0, fmt, args);
+    guk_cprintk(0, fmt, args);
     va_end(args);
 }
 
+/* Prints to the hypervsior console */
 void guk_xprintk(const char *fmt, ...)
 {
     va_list       args;
@@ -211,16 +220,44 @@ void guk_xprintk(const char *fmt, ...)
     va_end(args);
 }
 
+int guk_console_readbytes(char *buf, unsigned len) {
+    unsigned long flags;
+    int result;
+    spin_lock_irqsave(&xencons_lock, flags);
+    //xprintk("guk_getbytes\n");
+    if (xencons_ring_avail()) {
+      //xprintk("xencons_ring_avail=true\n");
+      result = xencons_ring_recv(buf, len);
+      spin_unlock_irqrestore(&xencons_lock, flags);
+    } else {
+      spin_unlock_irqrestore(&xencons_lock, flags);
+      //xprintk("waiting\n");
+      DEFINE_WAIT(w);
+      /* this calls block(), so schedule another thread and wait for input */
+      add_waiter(w, console_queue);
+      /* evidently (typically one) spurious wakeup with no data can happen, hence the loop */
+      while (1) {
+        schedule();
+        /* now read the data off the ring */
+        spin_lock_irqsave(&xencons_lock, flags);
+        result = xencons_ring_recv(buf, len);
+        spin_unlock_irqrestore(&xencons_lock, flags);
+        //xprintk("read %d\n", result);
+        if (result) break;
+        block(current);
+      }
+      remove_waiter(w);
+    }
+    return result;
+}
+
 void init_console(void)
 {
     if (trace_startup()) tprintk("Initialising console ... ");
     xencons_ring_init();
     console_initialised = 1;
-    /* We can now notify Dom0 */
+    /* switch over to notifying send */
     xencons_ring_send_fn = xencons_ring_send;
-    /* NOTE: this printk will notify Dom0.
-     * Otherwise we would have to wait till the next printk before we see all
-     * previous print output in Dom0 */
     if (trace_startup()) tprintk("done.\n");
 }
 
