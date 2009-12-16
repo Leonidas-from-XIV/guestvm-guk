@@ -34,12 +34,13 @@
 
 #define DEBUG_CMDLINE   "-XX:GUKDebug"
 
-void init_db_backend(char *cmd_line);
 struct app_main_args
 {
     char *cmd_line;
+    start_info_t *si_info;
 };
 
+void init_db_backend(struct app_main_args *aargs);
 int guk_debugging(void);
 void guk_set_debugging(int state);
 

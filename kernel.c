@@ -106,17 +106,15 @@ void setup_xen_features(void)
 void test_xenbus(void);
 
 
-static void db_thread(void *cmdl)
+static void db_thread(void *data)
 {
-    char *cmd_line = (char *)cmdl;
-
-    init_db_backend(cmd_line);
+    init_db_backend((struct app_main_args *)data);
 }
 
-static void start_debugging(char *cmd_line)
+static void start_debugging(struct app_main_args *aargs)
 {
     if (guk_debugging()) 
-	create_debug_thread("db-backend", db_thread, cmd_line);
+	create_debug_thread("db-backend", db_thread, aargs);
 }
 
 static USED unsigned long get_r14(void)
@@ -140,10 +138,10 @@ static void periodic_thread(void *unused)
 }
 
 /* This should be overridden by the application we are linked against. */
-__attribute__((weak)) int guk_app_main(struct app_main_args *args)
+__attribute__((weak)) int guk_app_main(struct app_main_args *aargs)
 {
     printk("Dummy main: command_line=%s, in debug_mode=%d\n",
-            args->cmd_line, guk_debugging());
+            aargs->cmd_line, guk_debugging());
     create_thread("periodic-thread", periodic_thread, UKERNEL_FLAG, NULL);
     return 0;
 }
@@ -247,13 +245,13 @@ void start_kernel(start_info_t *si)
 
     guk_set_debugging(strstr((char *)si->cmd_line, DEBUG_CMDLINE) != NULL);
     /* Call app_main, but only if we aren't in the debug mode */
+    aargs.cmd_line = (char *)si->cmd_line;
+    aargs.si_info = si;
     if(!guk_debugging())
     {
-        aargs.cmd_line = (char *)si->cmd_line;
-
         run_main(&aargs);
     } else
-	start_debugging((char *)si->cmd_line);
+	start_debugging(&aargs);
 
     /* Everything initialised, start idle thread */
     run_idle_thread();

@@ -71,7 +71,7 @@ static int db_in_use = 0;
 static struct dbif_back_ring ring;
 static grant_ref_t ring_gref;
 static evtchn_port_t port;
-static char *cmd_line;
+static struct app_main_args *main_args;
 /* page for communicating block data */
 static grant_ref_t data_grant_ref;
 static char *data_page;
@@ -960,7 +960,6 @@ static void handle_connection(int dom_id)
     char *err, node[256];
     struct dbif_sring *sring;
     struct thread *thread;
-    struct app_main_args aargs;
 
     /* Temporary: for debugging we accept all the connections */
     db_in_use = 0;
@@ -1004,8 +1003,7 @@ static void handle_connection(int dom_id)
                         "connected",
                         "gref=%d evtchn=%d dgref=%d", ring_gref, port, data_grant_ref);
 
-    aargs.cmd_line = cmd_line;
-    guk_app_main(&aargs);
+    guk_app_main(main_args);
 }
 
 /* Small utility function to figure out our domain id */
@@ -1020,14 +1018,14 @@ static domid_t get_self_id(void)
     return ret;
 }
 
-void init_db_backend(char *cmdl)
+void init_db_backend(struct app_main_args *aargs)
 {
     xenbus_transaction_t xbt;
     char *err, *message, *watch_rsp;
     int retry;
 
     printk("Initialising debugging backend\n");
-    cmd_line = cmdl;
+    main_args = aargs;
     db_back_access = 0;
 again:
     retry = 0;
