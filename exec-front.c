@@ -74,13 +74,14 @@ static int check(char *err) {
 #define EXEC_STATUS 0
 #define WAIT_STATUS 1
 #define READ_STATUS 2
-#define CLOSE_STATUS 3
-#define DESTROY_STATUS 4
+#define WRITE_STATUS 3
+#define CLOSE_STATUS 4
+#define DESTROY_STATUS 5
 #define WAIT_PERIOD 10   /* Wait period in ms */
 #define MAX_WAIT    50   /* Max number of WAIT_PERIODs */
 
-static char* status_strings[] = {"execstatus", "waitstatus", "readstatus", "closestatus",
-                                 "destroystatus"};
+static char* status_strings[] = {"execstatus", "waitstatus", "readstatus", "writestatus",
+                                 "closestatus", "destroystatus"};
 
 static int wait_for_status(int this_exec_id, int statuskind) {
   char *err, *status;
@@ -238,6 +239,29 @@ int guk_exec_read_bytes(int this_exec_id_fd, char *buffer, int length, long file
   result = strlen(bytes);
   strcpy(buffer, bytes);
   return result;
+}
+
+/* this_exec_id_fd encodes both the exec_id and the file descriptor we are reading on.
+ */
+int guk_exec_write_bytes(int this_exec_id_fd, char *buffer, int length, long file_offset) {
+  char nodename[1024];
+  char *err;
+  int status;
+  char zbuffer[1024];
+  BUG_ON(length > 1023);
+  strncpy(zbuffer, buffer, length);
+  zbuffer[length] = 0;
+  sprintf(nodename, "/local/domain/0/backend/exec/requests/%d/%d", self_id, this_exec_id_fd);
+  err = xenbus_printf(XBT_NIL, nodename, "write", "%u,%u,%s", length, file_offset, zbuffer);
+  if (err) {
+    free(err);
+    return -EIO;
+  }
+  status = wait_for_status(this_exec_id_fd, WRITE_STATUS);
+  if (status < 0) {
+    return status;
+  }
+  return length;
 }
 
 /* this_exec_id_fd encodes both the exec_id and the file descriptor we closing.

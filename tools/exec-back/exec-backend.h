@@ -53,6 +53,7 @@
 #define REQUEST_NODE        EXEC_REQUEST_NODE
 #define WAIT_REQUEST_NODE   WATCH_NODE"/%d/%d/wait"
 #define READ_REQUEST_NODE   WATCH_NODE"/%d/%d/read"
+#define WRITE_REQUEST_NODE   WATCH_NODE"/%d/%d/write"
 #define CLOSE_REQUEST_NODE   WATCH_NODE"/%d/%d/close"
 #define FRONTEND_NODE       "/local/domain/%d/device/exec/%d"
 

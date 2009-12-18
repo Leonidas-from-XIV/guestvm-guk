@@ -358,12 +358,19 @@ int wait_for_process_exit(struct request *request) {
     }
 }
 
-static void handle_wait_request(struct request *request) {
+static void *handle_wait_request_in_thread(void *data) {
+    struct request *request = (struct request *)data;
     request->status = wait_for_process_exit(request);
     /* communicate wait status to frontend */
     write_status(request, "wait");
     /* mark exited */
     request->pid = -1;
+    return NULL;
+}
+
+static void handle_wait_request(struct request *request) {
+    pthread_t handling_thread;
+    pthread_create(&handling_thread, NULL, &handle_wait_request_in_thread, request);
 }
 
 static void handle_read_request(struct request *request, int request_id) {
@@ -390,6 +397,26 @@ static void handle_read_request(struct request *request, int request_id) {
       xenbus_printf(xsh, XBT_NULL, node, "readbytes", "%s", buffer);
     }
     write_status_id(request, "read", request_id);
+    
+}
+
+static void handle_write_request(struct request *request, int request_id) {
+    char node[1024];
+    char *write_info;
+    char data[1024];
+    int fd, rfd, length, file_offset;
+    int result;
+
+    fd = fd_from_request_id(request_id);
+    /* the request_id encodes the exec_id and the fd */
+    sprintf(node, WRITE_REQUEST_NODE, request->dom_id, request_id);
+    write_info = xs_read(xsh, XBT_NULL, node, NULL);
+    sscanf(write_info, "%u,%u,%s", &length, &file_offset, &data[0]);
+    rfd = request->stdio[fd];
+    printf("Write %u[%u],%u,%u\n", fd, rfd, length, file_offset);
+    result = write(rfd, data, length);
+    request->status = result < 0 ? -errno : 0;
+    write_status_id(request, "write", request_id);
 }
 
 static void handle_close_request(struct request *request, int request_id) {
@@ -460,16 +487,24 @@ static void handle_connection(int dom_id, int request_id, char *rkind)
       if (request == NULL) {
 	return;
       }
+      /* cant free yet, frontend calls wait immediately in a reaper thread,
+       * which also means we must handle wait asynchronously in case the frontend 
+       * writes after the wait (in a different thread), which would block forever.
+       */
       handle_wait_request(request);
-      /* cant free yet, frontend calls wait immediately in a reaper thread */
-      //free(request);
-      //active_requests[request->slot] = NULL;
+
     } else if (strcmp(rkind, "read") == 0) {
       request = check_find_request(dom_id, exec_request_id(request_id), rkind);
       if (request == NULL) {
 	return;
       }      
       handle_read_request(request, request_id);
+    } else if (strcmp(rkind, "write") == 0) {
+      request = check_find_request(dom_id, exec_request_id(request_id), rkind);
+      if (request == NULL) {
+	return;
+      }      
+      handle_write_request(request, request_id);
     } else if (strcmp(rkind, "close") == 0) {
       request = check_find_request(dom_id, exec_request_id(request_id), rkind);
       if (request == NULL) {
