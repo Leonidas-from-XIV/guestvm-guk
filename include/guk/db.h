@@ -43,6 +43,7 @@ struct app_main_args
 void init_db_backend(struct app_main_args *aargs);
 int guk_debugging(void);
 void guk_set_debugging(int state);
+void guk_crash_to_debugger(void);
 
 void guk_db_exit_notify_and_wait(void);
 

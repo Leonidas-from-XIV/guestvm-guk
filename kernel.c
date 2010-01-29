@@ -260,22 +260,31 @@ void start_kernel(start_info_t *si)
 /*
  * crash_exit: 
  * This will generally be because the system has got itself into
- * a really bad state. It must be killed.
+ * a bad state. It must be killed, but if debugging, try debugger first.
  */
 static int crashing = 0;
 void crash_exit_msg(char *msg) {
     // System is unstable, so just hypervisor console IO message
-    if (!crashing) {
+    if (crashing == 0) {
       crashing = 1;
       xprintk("crash_exit: %s\n", msg);
       flush_trace();
+      if (guk_debugging()) {
+        // force a breakpoint
+        guk_crash_to_debugger();
+      }
     } else {
-      // just spin
-      while (1) {
-	cpu_relax();
+      xprintk("recursive entry to crash_exit\n");
+      // recursive or concurrent crash
+      if (crashing == 2) {
+          // shutdown already initiated (by another cpu)
+          while (1) {
+	    cpu_relax();
+	  }
       }
     }
 
+    crashing = 2;
     for( ;; ) {
         struct sched_shutdown sched_shutdown = { .reason = SHUTDOWN_crash };
         HYPERVISOR_sched_op(SCHEDOP_shutdown, &sched_shutdown);
@@ -299,7 +308,7 @@ void crash_exit(void) {
 
 void crash_exit_backtrace(void) {
 	print_backtrace(current);
-	crash_exit_msg("no message");
+	crash_exit();
 }
 
 void ok_exit(void) {
@@ -327,4 +336,8 @@ int num_option(char *cmd_line, char *option) {
       }
     }
     return result;
+}
+
+int guk_domain_id(void) {
+  return xenbus_get_self_id();
 }

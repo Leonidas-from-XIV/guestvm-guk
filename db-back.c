@@ -102,6 +102,21 @@ void guk_set_debugging(int state) {
   debug_state = state;
 }
 
+/* default implementation does nothing */
+__attribute__((weak)) void guk_is_crashing(void) {
+}
+
+void guk_crash_to_debugger(void) {
+    // domain has crashed but we try to get to debugger
+    struct thread *thread = current;
+    // must be preemptible to take a bpt and to enter scheduler
+    // (also not in spinlock), see traps.c, sched.c
+    thread->preempt_count = 0;
+    thread->lock_count = 0;
+    // we call a well known method where a breakpoint may have been set
+   guk_is_crashing();
+}
+
 /*
  * The one ukernel thread the debugger needs to gather is the primordial maxine thread.
  */
