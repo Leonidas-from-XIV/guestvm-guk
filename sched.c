@@ -888,6 +888,12 @@ void exit_thread(void)
 {
     struct thread *thread = current;
 
+    /* give any app thread its final callback before disabling pre-emption */
+    if (!is_ukernel(thread)) {
+        /* implementation specific destroy code */
+        guk_invoke_destroy(thread->specific);
+    }
+
     /* The synchronisation works as following:
      *  - exit_thread is always executed by current, it must therefore be the
      *    case that RUNNING_FLAG is set. This guarantees that no other CPU will
@@ -908,11 +914,6 @@ void exit_thread(void)
      */
     preempt_disable();
     BUG_ON(!is_running(thread));
-    if (!is_ukernel(thread)) {
-        /* implementation specific destroy code */
-        guk_invoke_destroy(thread->specific);
-    }
-
     block(thread);
 
     if (trace_sched() || trace_startup()) ttprintk("TX %d\n", thread->id);
