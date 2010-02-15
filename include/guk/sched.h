@@ -99,24 +99,25 @@ struct fp_regs {
 
 
 struct thread {
-    int               preempt_count; /*  0 => preemptable,
+    /*  0 */ int               preempt_count; /*  0 => preemptable,
                                         >0 => preemption disabled,
                                         <0 => bug*/
-                                    /* offset 0 (used in x86_64.S) */
-    u32               flags;        /* offset 4 */
-    struct pt_regs    *regs;        /* Registers saved in the trap frame */
-                                    /* offset 8 */
-    struct fp_regs    *fpregs;      /* Floating point save area */
-    uint16_t          id;
-    int16_t           appsched_id;
-    int16_t           guk_stack_allocated;
-    char              *name;
-    char              *stack;
-    unsigned long     stack_size;
-    void              *specific;
-    u64               timeslice;
-    u64               resched_running_time;
-    unsigned int      cpu;
+                                        /* (used in x86_64.S) */
+    /*  4 */ u32               flags;        /* state */
+    /*  8 */ struct pt_regs    *regs;            /* Registers saved in the trap frame */
+    /* 16 */ struct fp_regs    *fpregs;          /* Floating point save area */
+    /* 24 */ uint16_t          id;
+    /* 26 */ int16_t           appsched_id;
+    /* 28 */ int16_t           guk_stack_allocated;
+    /* 32 */ char              *name;
+    /* 40 */ char              *stack;
+    /* 48 */ unsigned long     stack_size;
+    /* 56 */ void              *specific;
+    /* 64 */ u64               timeslice;
+    /* 72 */ u64               resched_running_time; /* end of our timeslice */
+    /* 80 */ u64               start_running_time;   /* value when last scheduled */
+    /* 88 */ u64               cum_running_time;     /* cumulative running time */
+    /* 96 */ unsigned int      cpu;
     int               lock_count;
     unsigned long     sp;  /* Stack pointer */
     unsigned long     ip;  /* Instruction pointer */
@@ -125,7 +126,7 @@ struct thread {
     struct list_head  ready_list; /* links thread into run queue, zombie queue, joiner queue */
     struct list_head  joiners; /* list of threads that wait for this thread to die */
     struct list_head  aux_thread_list; /* not really needed, could use ready_list */
-    void *db_data;                 /* debugger may store info here */
+    void *db_data;                 /* debugger may store info here */  
 };
 
 extern struct list_head thread_list; /* a list of threads in the system */
@@ -135,7 +136,7 @@ void idle_thread_fn(void *data);
 
 
 #define RUNNABLE_FLAG           0x00000001     /* Thread can be run on a CPU */
-#define RUNNING_FLAG            0x00000002     /* Thread is currently runnig */
+#define RUNNING_FLAG            0x00000002     /* Thread is currently running */
 #define RESCHED_FLAG            0x00000004     /* Scheduler should be called at
                                                   the first opportunity.
                                                   WARN: flags used explicitly in

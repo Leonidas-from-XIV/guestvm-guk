@@ -215,7 +215,7 @@ static void add_thread_list(struct thread *thread)
 static void del_thread_list(struct thread *thread)
 {
     spin_lock(&thread_list_lock);
-    list_del(&thread->thread_list);
+    list_del_init(&thread->thread_list);
     spin_unlock(&thread_list_lock);
 }
 
@@ -464,7 +464,7 @@ static void wake_joiners(struct thread *joinee)
     {
         thread = list_entry(iterator, struct thread, ready_list);
 	clear_joining(thread);
-	list_del(&thread->ready_list);
+	list_del_init(&thread->ready_list);
 	wake(thread);
     }
 }
@@ -493,7 +493,7 @@ static void reap_dead(void)
 	    if(!is_running(thread) && (thread->cpu == smp_processor_id())) {
 		if (trace_sched() || trace_mm())
 		    ttprintk("DT %d\n", thread->id);
-		list_del(&thread->ready_list);
+		list_del_init(&thread->ready_list);
 
 		if(!list_empty(&thread->joiners))
 		    wake_joiners(thread);
@@ -543,7 +543,7 @@ static inline struct thread *pick_thread(struct thread *prev, int cpu)
      */
     if(!upcalls_active || !is_appsched(prev)) {
 	if(is_runnable(prev) && prev != this_cpu(idle_thread)) {
-	    list_del(&prev->ready_list);
+	    list_del_init(&prev->ready_list);
 	    list_add_tail(&prev->ready_list, &ready_queue);
 	}
     }
@@ -623,7 +623,9 @@ void guk_schedule(void)
     BUG_ON(in_spinlock(prev));
     BUG_ON(!is_preemptible(prev));
 
-    s_time_t start = NOW();
+    u64 running_time = get_running_time();
+    prev->cum_running_time += running_time - prev->start_running_time;
+
     /* Check if there are any threads that need to be woken up.
      * The overhead of checking it every schedule could be avoided if
      * we check it from the timer interrupt handler */
@@ -650,15 +652,16 @@ void guk_schedule(void)
     if(!is_stepped(prev))
         clear_need_resched(prev);
 
-    next->resched_running_time = get_running_time() + next->timeslice;
-    set_timer_interrupt(timeslice);
+    next->resched_running_time = running_time + next->timeslice;
+    set_timer_interrupt(next->timeslice);
+    next->start_running_time = running_time;
 
     /* Interrupting the switch is equivalent to having the next thread
        interrupted at the return instruction. And therefore at safe point. */
     if(prev != next) {
       if (trace_sched()) {
         ttprintk("TS %d %d %ld %ld\n",
-                prev->id, next->id, next->resched_running_time, start);
+                prev->id, next->id, next->resched_running_time, NOW());
       }
         /* Setting current_thread in the cpu private structure needs to be
          * atomic with respect to interrupts */
@@ -688,7 +691,7 @@ void guk_schedule(void)
     } else {
       if (trace_sched()) {
         ttprintk("TS %d %d %ld %ld\n",
-                prev->id, next->id, next->resched_running_time, start);
+                prev->id, next->id, next->resched_running_time, NOW());
       }
     }
 
@@ -805,6 +808,7 @@ static struct thread* create_thread_with_id_stack(char *name,
     }
     thread->preempt_count = 0;
     thread->resched_running_time = 0;
+    thread->cum_running_time = 0;
     thread->timeslice = timeslice;
     thread->lock_count = 0;
     thread->appsched_id = -1;
@@ -824,7 +828,6 @@ static struct thread* create_thread_with_id_stack(char *name,
 		thread->id, name, thread->cpu, thread->flags, thread->sp);
 
     wake(thread);
-
     return thread;
 }
 
@@ -922,7 +925,9 @@ void exit_thread(void)
     set_dying(thread);
     list_add_tail(&thread->ready_list, &zombie_queue);
     /* wake up any joiners now rather than wait for reap when idle  */
-    if(!list_empty(&thread->joiners)) wake_joiners(thread);
+    if(!list_empty(&thread->joiners)) {
+      wake_joiners(thread);
+    }
 
     spin_unlock(&zombie_lock);
 
@@ -949,7 +954,7 @@ void block(struct thread *thread)
 	} else {
 	    spin_lock_irqsave(&ready_lock, flags);
 	    clear_runnable(thread);
-	    list_del(&thread->ready_list);
+	    list_del_init(&thread->ready_list);
 	    spin_unlock_irqrestore(&ready_lock, flags);
 	}
     } else {
@@ -1044,7 +1049,7 @@ void guk_sleep_queue_del(struct sleep_queue *sq)
 {
     long flags;
     spin_lock_irqsave(&sleep_lock, flags);
-    list_del(&sq->list);
+    list_del_init(&sq->list);
     clear_active(sq);
     spin_unlock_irqrestore(&sleep_lock, flags);
 }
@@ -1124,7 +1129,7 @@ void guk_interrupt(struct thread *thread)
     if (!(is_runnable(thread) || is_running(thread) || is_dying(thread))) {
 	if (is_joining(thread)) {
 	    spin_lock(&zombie_lock);
-	    list_del(&thread->ready_list);
+	    list_del_init(&thread->ready_list);
 	    clear_joining(thread);
 	    spin_unlock(&zombie_lock);
 	}

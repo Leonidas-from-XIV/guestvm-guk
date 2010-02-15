@@ -109,7 +109,7 @@ u64      guk_monotonic_clock(void);
 void     guk_gettimeofday(struct timeval *tv);
 void     block_domain(s_time_t until);
 void     check_need_resched(void);
-u64      get_running_time(void);
+u64      guk_get_cpu_running_time(int cpu);
 void     set_timer_interrupt(u64 delta);
 
 void     time_suspend(void);
@@ -118,5 +118,6 @@ void     time_resume(void);
 #define monotonic_clock guk_monotonic_clock
 #define time_addend guk_time_addend
 #define gettimeofday guk_gettimeofday
+#define get_running_time() guk_get_cpu_running_time(smp_processor_id())
 
 #endif /* _TIME_H_ */

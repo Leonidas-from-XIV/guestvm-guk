@@ -264,14 +264,14 @@ void block_domain(s_time_t until)
     BUG_ON(irqs_disabled());
 }
 
-u64 get_running_time(void)
+u64 guk_get_cpu_running_time(int cpu)
 {
     vcpu_runstate_info_t runstate;
 
     if(!smp_init_completed)
         return 0ULL;
     BUG_ON(HYPERVISOR_vcpu_op(VCPUOP_get_runstate_info,
-                              smp_processor_id(),
+                              cpu,
                               &runstate));
 
     return runstate.time[RUNSTATE_running];
@@ -318,11 +318,6 @@ void timer_handler(evtchn_port_t ev, void *ign)
     //static int count;
     get_time_values_from_xen();
     update_wallclock();
-    /* This causes problems (stuck spinlocks) and its not clear its useful info
-    if (trace_sched()) {
-      ttprintk("TI %d %x\n", this_cpu(current_thread)->id, this_cpu(current_thread)->preempt_count);
-    }
-    */
     check_need_resched();
 }
 
