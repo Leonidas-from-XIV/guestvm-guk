@@ -280,10 +280,9 @@ u64 guk_get_cpu_running_time(int cpu)
 void check_need_resched(void)
 {
     u64 resched_time, running_time;
-    struct thread *current_thread;
+    struct thread *current_thread = guk_not_idle_or_stepped();
 
-    current_thread = this_cpu(current_thread);
-    if(current_thread != this_cpu(idle_thread))
+    if(current_thread != NULL)
     {
         resched_time = current_thread->resched_running_time;
         if(resched_time == 0ULL)
@@ -292,12 +291,8 @@ void check_need_resched(void)
             return;
         }
         running_time = get_running_time();
-        if(running_time >= resched_time) {
-            if(is_stepped(current_thread)) {
-                //tprintk("Would set need resched on stepped thread.\n");
-            } else
-	      
-		set_need_resched(current_thread);
+        if (running_time >= resched_time) {
+	    set_need_resched(current_thread);
         }
         else
         {

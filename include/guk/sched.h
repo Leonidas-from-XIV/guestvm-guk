@@ -242,6 +242,8 @@ int guk_set_timeslice(struct thread *thread, int timeslice);
 int guk_sched_num_cpus(void);
 /* if cpu is sleeping wake it up */
 void guk_kick_cpu(int cpu);
+/* returns NULL if current thread is idle or stepped, else current thread */
+struct thread *guk_not_idle_or_stepped(void);
 /* prints entire run queue using tprintk */
 void guk_print_runqueue(void);
 /* prints runqueue using given print function. Include ukernel threads iff "all" */

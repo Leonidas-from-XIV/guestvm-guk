@@ -1164,6 +1164,14 @@ void guk_local_irqrestore(unsigned long flags) {
 	local_irq_restore(flags);
 }
 
+struct thread* guk_not_idle_or_stepped(void) {
+  struct thread *current_thread = this_cpu(current_thread);
+  if (current_thread != this_cpu(idle_thread) && !is_stepped(current_thread)) {
+      return current_thread;
+  }
+  return NULL;
+}
+
 /*
  * a CPU marked as not UP will block in here
  */
