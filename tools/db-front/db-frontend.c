@@ -99,7 +99,7 @@ wait_again:
         goto wait_again;
     
     prod = ring.sring->req_prod;
-    rmb();
+    xen_rmb();
     cons = ring.rsp_cons;
     assert(prod = cons + 1);
     rsp = RING_GET_RESPONSE(&ring, cons);
@@ -721,4 +721,3 @@ int db_detach(void)
 
     return 0;
 }
-
