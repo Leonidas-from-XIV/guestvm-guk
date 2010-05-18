@@ -246,14 +246,13 @@ static void dispatch_gather_threads(struct dbif_request *req)
     struct db_thread *db_thread = (struct db_thread *)data_page;
 
     DEBUG(1, "Gather threads request.");
-    /* -1 == max value for uint16_t */
     spin_lock(&thread_list_lock);
     list_for_each(list_head, &thread_list) {
         thread = list_entry(list_head, struct thread, thread_list);
         if (is_app_thread(thread)) {
 	    db_thread->id = thread->id;
 	    db_thread->flags = thread->flags;
-	    db_thread->stack = (unsigned long)thread->stack;
+	    db_thread->stack = (uint64_t) thread->stack;
 	    db_thread->stack_size = thread->stack_size;
 	    db_thread++;
 	    numThreads++; /* TODO: handle overflow */
@@ -1040,6 +1039,7 @@ void init_db_backend(struct app_main_args *aargs)
     int retry;
 
     printk("Initialising debugging backend\n");
+    //printk("size of dbif_request %d, dbif_response %d \n", sizeof(struct dbif_request), sizeof(struct dbif_response));
     main_args = aargs;
     db_back_access = 0;
 again:

@@ -45,7 +45,8 @@
 #include "db-frontend.h"
 
 /* uncomment next line to build a version that traces all activity to a file in /tmp */
-#define DUMP_TRACE
+//#define DUMP_TRACE
+//#define TRACE_REQ
 
 #ifdef DUMP_TRACE
 static FILE *trace_file = NULL; 
@@ -54,6 +55,28 @@ static FILE *trace_file = NULL;
     fflush(trace_file)
 #else
 #define TRACE(_f, _a...)    ((void)0)
+#endif
+
+#ifdef TRACE_REQ
+void trace_request(struct dbif_request *req) {
+  printf("request: id %d, ", req->type, req->id);
+  switch (req->type) {
+    case REQ_APP_SPECIFIC1:
+      printf("APP_SPECIFIC1");
+      break;
+    case REQ_READBYTES:
+      printf("READBYTES address %lx, n %d", req->u.readbytes.address, req->u.readbytes.n);
+    break;
+
+  default:
+      printf("UNKNOWN");
+  }
+  printf("\n");
+}
+#define REQ(_req) \
+  trace_request(_req);
+#else
+#define REQ(_f, _a...)    ((void)0)
 #endif
 
 struct xs_handle *xsh = NULL;
@@ -115,7 +138,7 @@ wait_again:
 
 /******************** Implementation of ptrace like functions *****************/
 
-uint64_t read_u64(unsigned long address)
+uint64_t read_u64(uint64_t address)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -136,7 +159,7 @@ uint64_t read_u64(unsigned long address)
     return rsp->ret_val;
 }
 
-void write_u64(unsigned long address, uint64_t value)
+void write_u64(uint64_t address, uint64_t value)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -163,14 +186,14 @@ uint16_t multibytebuffersize(void)
   return PAGE_SIZE;
 }
 
-uint16_t readbytes(unsigned long address, char *buffer, uint16_t n)
+uint16_t readbytes(uint64_t address, char *buffer, uint16_t n)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
     int i;
     RING_IDX idx;
 
-    TRACE("address: %lx, n: %d", address, n);
+    TRACE("address: %llx, n: %d", address, n);
     req = get_request(&idx);
     req->type = REQ_READBYTES;
     /* Magic number */
@@ -178,6 +201,7 @@ uint16_t readbytes(unsigned long address, char *buffer, uint16_t n)
     req->u.readbytes.address = address;
     req->u.readbytes.n = n;
 
+    REQ(req);
     commit_request(idx);
     rsp = get_response();
     assert(rsp->id == 13);
@@ -190,7 +214,7 @@ uint16_t readbytes(unsigned long address, char *buffer, uint16_t n)
     return rsp->ret_val;
 }
 
-uint16_t writebytes(unsigned long address, char *buffer, uint16_t n)
+uint16_t writebytes(uint64_t address, char *buffer, uint16_t n)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -198,7 +222,7 @@ uint16_t writebytes(unsigned long address, char *buffer, uint16_t n)
     int i;
 
     if (signed_off) return n;
-    TRACE("address: %lx, n: %d", address, n);
+    TRACE("address: %llx, n: %d", address, n);
     req = get_request(&idx);
     req->type = REQ_WRITEBYTES;
     /* Magic number */
@@ -245,7 +269,7 @@ struct db_thread* gather_threads(int *num)
     TRACE("numThreads: %d", numThreads);
     threads = (struct db_thread *)malloc(numThreads * sizeof(struct db_thread));
     for (i = 0; i < numThreads; i++) {
-      TRACE("id %d, flags %x, stack %lx, stacksize %lx", thread_data->id, thread_data->flags,
+      TRACE("id %d, flags %x, stack %llx, stacksize %llx", thread_data->id, thread_data->flags,
 	    thread_data->stack, thread_data->stack_size);
       threads[i].id = thread_data->id;
       threads[i].flags = thread_data->flags;
@@ -422,24 +446,24 @@ struct db_regs* get_regs(uint16_t thread_id)
     regs->flags = db_regs->flags;
     regs->rsp = db_regs->rsp; 
 
-    TRACE("Regs: r15=%lx, "
-                "r14=%lx, "
-                "r13=%lx, "
-                "r12=%lx, "
-                "rbp=%lx, "
-                "rbx=%lx, "
-                "r11=%lx, "
-                "r10=%lx, "
-                "r9=%lx, "
-                "r8=%lx, "
-                "rax=%lx, "
-                "rcx=%lx, "
-                "rdx=%lx, "
-                "rsi=%lx, "
-                "rdi=%lx, "
-                "rip=%lx, "
-                "flags=%lx, "
-                "rsp=%lx.",
+    TRACE("Regs: r15=%llx, "
+                "r14=%llx, "
+                "r13=%llx, "
+                "r12=%llx, "
+                "rbp=%llx, "
+                "rbx=%llx, "
+                "r11=%llx, "
+                "r10=%llx, "
+                "r9=%llx, "
+                "r8=%llx, "
+                "rax=%llx, "
+                "rcx=%llx, "
+                "rdx=%llx, "
+                "rsi=%llx, "
+                "rdi=%llx, "
+                "rip=%llx, "
+                "flags=%llx, "
+                "rsp=%llx.",
                  db_regs->r15, 
                  db_regs->r14,
                  db_regs->r13,
@@ -458,22 +482,22 @@ struct db_regs* get_regs(uint16_t thread_id)
                  db_regs->rip,
                  db_regs->flags,
                  db_regs->rsp);
-    TRACE("FPRegs: xmm0=%lx, "
-	          "xmm1=%lx, "
-	          "xmm2=%lx, "
-	          "xmm3=%lx, "
-	          "xmm4=%lx, "
-	          "xmm5=%lx, "
-	          "xmm6=%lx, "
-	          "xmm7=%lx, "
-	          "xmm8=%lx, "
-	          "xmm9=%lx, "
-	          "xmm10=%lx, "
-	          "xmm11=%lx, "
-	          "xmm12=%lx, "
-	          "xmm13=%lx, "
-	          "xmm14=%lx, "
-	          "xmm15=%lx.",
+    TRACE("FPRegs: xmm0=%llx, "
+	          "xmm1=%llx, "
+	          "xmm2=%llx, "
+	          "xmm3=%llx, "
+	          "xmm4=%llx, "
+	          "xmm5=%llx, "
+	          "xmm6=%llx, "
+	          "xmm7=%llx, "
+	          "xmm8=%llx, "
+	          "xmm9=%llx, "
+	          "xmm10=%llx, "
+	          "xmm11=%llx, "
+	          "xmm12=%llx, "
+	          "xmm13=%llx, "
+	          "xmm14=%llx, "
+	          "xmm15=%llx.",
                   db_regs->xmm0,
                   db_regs->xmm1,
                   db_regs->xmm2,
@@ -494,13 +518,13 @@ struct db_regs* get_regs(uint16_t thread_id)
     return regs;
 }
 
-int set_ip(uint16_t thread_id, unsigned long ip)
+int set_ip(uint16_t thread_id, uint64_t ip)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
     RING_IDX idx;
 
-    TRACE("thread_id: %d, ip=%lx", thread_id, ip);
+    TRACE("thread_id: %d, ip=%llx", thread_id, ip);
     req = get_request(&idx);
     req->type = REQ_SET_IP;
     /* Magic number */
@@ -517,8 +541,8 @@ int set_ip(uint16_t thread_id, unsigned long ip)
 }
 
 int get_thread_stack(uint16_t thread_id, 
-                     unsigned long *stack_start,
-                     unsigned long *stack_size)
+                     uint64_t *stack_start,
+                     uint64_t *stack_size)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -564,6 +588,7 @@ uint64_t app_specific1(uint64_t arg)
     req->id = 13;
     req->u.app_specific.arg = arg;
 
+    REQ(req);
     commit_request(idx);
     rsp = get_response();
     assert(rsp->id == 13);
@@ -572,7 +597,7 @@ uint64_t app_specific1(uint64_t arg)
     return rsp->ret_val;
 }
 
-int activate_watchpoint(unsigned long address, unsigned long size, int kind) {
+int activate_watchpoint(uint64_t address, uint64_t size, int kind) {
     struct dbif_request *req;
     struct dbif_response *rsp;
     RING_IDX idx;
@@ -593,7 +618,7 @@ int activate_watchpoint(unsigned long address, unsigned long size, int kind) {
     return rsp->ret_val;
 }
 
-int deactivate_watchpoint(unsigned long address, unsigned long size) {
+int deactivate_watchpoint(uint64_t address, uint64_t size) {
     struct dbif_request *req;
     struct dbif_response *rsp;
     RING_IDX idx;
@@ -613,7 +638,7 @@ int deactivate_watchpoint(unsigned long address, unsigned long size) {
     return rsp->ret_val;
 }
 
-unsigned long watchpoint_info(int16_t thread_id, int *kind) {
+uint64_t watchpoint_info(int16_t thread_id, int *kind) {
     struct dbif_request *req;
     struct dbif_response *rsp;
     RING_IDX idx;
@@ -673,6 +698,8 @@ int db_attach(int domain_id)
     int ret;
     grant_ref_t gref, dgref;
     struct dbif_sring *sring;
+    int ss1 = sizeof(struct dbif_request);
+    int ss2 = sizeof(struct dbif_response);
 #ifdef DUMP_TRACE
     char buffer[256];
     
@@ -683,13 +710,12 @@ int db_attach(int domain_id)
     /* Open the connection to XenStore first */
     xsh = xs_domain_open();
     assert(xsh != NULL);
-    
     ret = xenbus_request_connection(dom_id, &gref, &evtchn, &dgref);
-    printf("db_attach ret=%d\n", ret);
+    //printf("db_attach ret=%d\n", ret);
     //assert(ret == 0);
     if (ret != 0) return ret;
-    printf("Connected to the debugging backend (gref=%d, evtchn=%d, dgref=%d).\n",
-            gref, evtchn, dgref);
+    //printf("Connected to the debugging backend (gref=%d, evtchn=%d, dgref=%d).\n",
+    //        gref, evtchn, dgref);
 
     gnth = xc_gnttab_open();
     assert(gnth != -1);

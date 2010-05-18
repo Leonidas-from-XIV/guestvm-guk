@@ -96,7 +96,7 @@ watch_again:
         lgref = -1;
         levtchn = -1;
         sscanf(str, "gref=%d evtchn=%d dgref=%d", &lgref, &levtchn, &ldgref);
-        printf("Gref is = %d, evtchn = %d, DGref = %d\n", lgref, levtchn, ldgref);
+        //printf("Gref is = %d, evtchn = %d, DGref = %d\n", lgref, levtchn, ldgref);
         *gref = lgref;
         *evtchn = levtchn;
 	*dgref = ldgref;

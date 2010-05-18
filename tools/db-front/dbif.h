@@ -63,22 +63,22 @@
 #define REQ_WP_INFO                 19
 
 struct dbif_read_u64_request {
-    unsigned long address;
+    uint64_t address;
 };
 
 struct dbif_write_u64_request {
-    unsigned long address;
+    uint64_t address;
     uint64_t value;
 };
 
 struct dbif_readbytes_request {
-    unsigned long address;
-    uint16_t n;
+    uint64_t address;
+    uint64_t n;
 };
 
 struct dbif_writebytes_request {
-    unsigned long address;
-    uint16_t n;
+    uint64_t address;
+    uint64_t n;
 };
 
 struct dbif_gather_threads_request {
@@ -89,24 +89,24 @@ struct dbif_suspend_request {
 };
 
 struct dbif_resume_request {
-    uint16_t thread_id;
+    uint64_t thread_id;
 };
 
 struct dbif_get_regs_request {
-    uint16_t thread_id;
+    uint64_t thread_id;
 };
 
 struct dbif_single_step_request {
-    uint16_t thread_id;
+    uint64_t thread_id;
 };
 
 struct dbif_set_ip_request {
-    uint16_t thread_id;
-    unsigned long ip;
+    uint64_t thread_id;
+    uint64_t ip;
 };
 
 struct dbif_get_stack_request {
-    uint16_t thread_id;
+    uint64_t thread_id;
 };
 
 struct dbif_app_specific_request {
@@ -114,7 +114,7 @@ struct dbif_app_specific_request {
 };
 
 struct dbif_db_debug_request {
-    int level;
+    uint64_t level;
 };
 
 struct dbif_db_signoff_request {
@@ -124,19 +124,22 @@ struct dbif_suspend_resume_threads {
 };
 
 struct dbif_watchpoint_request {
-    unsigned long address;
-    unsigned long size;
-    int kind;
+    uint64_t address;
+    uint64_t size;
+    uint16_t kind;
+    uint16_t pad1;
+    uint32_t pad2;
 };
 
 struct dbif_watchpoint_info_request {
-    uint16_t thread_id;
+    uint64_t thread_id;
 };
 
 /* DB request */
 struct dbif_request {
-    uint8_t type;                 /* Type of the request                  */
+    uint16_t type;                 /* Type of the request                  */
     uint16_t id;                  /* Request ID, copied to the response   */
+    uint32_t pad;
     union {
         struct dbif_read_u64_request      read_u64;
         struct dbif_write_u64_request     write_u64;
@@ -161,47 +164,48 @@ struct dbif_request {
 typedef struct dbif_request dbif_request_t;
 
 struct db_thread {
-    int id;
-    int flags;
-    unsigned long stack;
-    unsigned long stack_size;
+    uint16_t id;
+    uint16_t pad;
+    uint32_t flags;
+    uint64_t stack;
+    uint64_t stack_size;
 };
 
 struct db_regs {
-        unsigned long xmm0;
-        unsigned long xmm1;
-        unsigned long xmm2;
-        unsigned long xmm3;
-        unsigned long xmm4;
-        unsigned long xmm5;
-        unsigned long xmm6;
-        unsigned long xmm7;
-        unsigned long xmm8;
-        unsigned long xmm9;
-        unsigned long xmm10;
-        unsigned long xmm11;
-        unsigned long xmm12;
-        unsigned long xmm13;
-        unsigned long xmm14;
-        unsigned long xmm15;
-	unsigned long r15;
-	unsigned long r14;
-	unsigned long r13;
-	unsigned long r12;
-	unsigned long rbp;
-	unsigned long rbx;
- 	unsigned long r11;
-	unsigned long r10;	
-	unsigned long r9;
-	unsigned long r8;
-	unsigned long rax;
-	unsigned long rcx;
-	unsigned long rdx;
-	unsigned long rsi;
-	unsigned long rdi;
-	unsigned long rip;
-        unsigned long flags;
-	unsigned long rsp; 
+        uint64_t xmm0;
+        uint64_t xmm1;
+        uint64_t xmm2;
+        uint64_t xmm3;
+        uint64_t xmm4;
+        uint64_t xmm5;
+        uint64_t xmm6;
+        uint64_t xmm7;
+        uint64_t xmm8;
+        uint64_t xmm9;
+        uint64_t xmm10;
+        uint64_t xmm11;
+        uint64_t xmm12;
+        uint64_t xmm13;
+        uint64_t xmm14;
+        uint64_t xmm15;
+	uint64_t r15;
+	uint64_t r14;
+	uint64_t r13;
+	uint64_t r12;
+	uint64_t rbp;
+	uint64_t rbx;
+ 	uint64_t r11;
+	uint64_t r10;	
+	uint64_t r9;
+	uint64_t r8;
+	uint64_t rax;
+	uint64_t rcx;
+	uint64_t rdx;
+	uint64_t rsi;
+	uint64_t rdi;
+	uint64_t rip;
+        uint64_t flags;
+	uint64_t rsp; 
 };
 
 
@@ -209,6 +213,8 @@ struct db_regs {
 /* DB response */
 struct dbif_response {
     uint16_t id;
+    uint16_t pad1;
+    uint32_t pad2;
     /* TODO: these should really be typed (i.e. define response structures
      * instead of using ret_val, ret_val2 only */
     uint64_t ret_val;

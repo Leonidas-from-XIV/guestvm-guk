@@ -28,6 +28,7 @@
 # including, but not limited to, the denied persons and specially
 # designated nationals lists is strictly prohibited.
 # 
+#
 # The standard target of this build is a 64-bit library that will be
 # linked with the Maxine Inspector.
 #
@@ -40,10 +41,11 @@ ifndef XEN_ROOT
 endif
 
 OSNAME ?= $(shell uname -s)
-OSARCH ?= $(shell arch)
 ifneq ($(OSNAME),Linux)
   $(error "db-front can only be built and installed in a Linux guest")
 endif
+
+OSARCH ?= $(shell arch)
 ifneq ($(OSARCH),x86_64)
   $(error "db-front must be compiled on a 64-bit system")
 endif
@@ -52,18 +54,21 @@ include $(XEN_ROOT)/tools/Rules.mk
 
 INCLUDES += -I.
 
-IBIN32       = db-frontend
+IBIN         = db-frontend
 LIB          = libguk_db.so
 
 MAJOR 		= 1.0
 MINOR 		= 0
 
-CFLAGS     += -Werror -Wno-unused -fno-strict-aliasing -I $(XEN_INCLUDE) -I $(XEN_LIBXC) -I $(XEN_XENSTORE) $(INCLUDES) -D_GNU_SOURCE
-CFLAGS32   += -m32 -Werror -Wno-unused -fno-strict-aliasing -I $(XEN_INCLUDE) -I $(XEN_LIBXC) -I $(XEN_XENSTORE) $(INCLUDES) -D_GNU_SOURCE
+CFLAGS   += -Werror
+CFLAGS   += -Wno-unused
+CFLAGS   += -fno-strict-aliasing
+CFLAGS   += -I $(XEN_ROOT)/tools/include -I $(XEN_LIBXC) -I $(XEN_XENSTORE)
+CFLAGS   += $(INCLUDES)
+CFLAGS   += -D_GNU_SOURCE
 
 # Get gcc to generate the dependencies for us.
-CFLAGS     += -Wp,-MD,.$(@F).d
-CFLAGS32   += -Wp,-MD,.$(@F).d
+CFLAGS   += -Wp,-MD,.$(@F).d
 DEPS      = .*.d
 
 LIBS      := -L.
@@ -71,13 +76,12 @@ LIBS      += -L$(XEN_LIBXC)
 LIBS      += -lxenctrl 
 LIBS      += -L$(XEN_XENSTORE) -lxenstore
 
-OBJS	  := db-xenbus.o db-frontend.o
+OBJS	  := db-xenbus.o
 PIC_OBJS  := db-xenbus.opic db-frontend.opic
-#OBJS32    := db-xenbus_32.o db-frontend_32.o gx_comm_32.o db-remote_32.o gx_utils_32.o
-OBJS32    := gx_comm_32.o db-remote_32.o gx_utils_32.o
-LIBS32    :=
 
-all: links $(LIB) $(LIB).$(MAJOR) $(LIB).$(MAJOR).$(MINOR) $(IBIN32)
+SUBDIRS := 32bit
+
+all: links $(LIB) $(LIB).$(MAJOR) $(LIB).$(MAJOR).$(MINOR)
 
 .PHONY: links
 links:	$(ARCH_LINKS)
@@ -92,24 +96,6 @@ $(LIB).$(MAJOR): $(LIB).$(MAJOR).$(MINOR)
 $(LIB).$(MAJOR).$(MINOR): $(PIC_OBJS)
 	$(CC) $(CFLAGS) $(LIBS) -Wl,$(SONAME_LDFLAG) -Wl,$(LIB).$(MAJOR) $(SHLIB_CFLAGS) -o $@ $^ 
 
-db-xenbus_32.o: db-xenbus.c
-	$(CC) $(CFLAGS32) -c -o db-xenbus_32.o $^
-
-db-frontend_32.o: db-frontend.c
-	$(CC) $(CFLAGS32) -c -o db-frontend_32.o $^
-
-db-remote_32.o: db-remote.c
-	$(CC) $(CFLAGS32) -c -o db-remote_32.o $^
-
-gx_comm_32.o: gx_comm.c
-	$(CC) $(CFLAGS32) -c -o gx_comm_32.o $^
-
-gx_utils_32.o: gx_utils.c
-	$(CC) $(CFLAGS32) -c -o gx_utils_32.o $^
-
-$(IBIN32): $(OBJS32)
-	$(CC)  $(CFLAGS32) -o db-frontend $(OBJS32) $(LIBS32)
-
 
 install: all
 	$(INSTALL_PROG) $(LIB).$(MAJOR).$(MINOR) $(DESTDIR)/usr/$(LIBDIR)
@@ -117,6 +103,9 @@ install: all
 	ln -sf $(LIB).$(MAJOR) $(DESTDIR)/usr/$(LIBDIR)/$(LIB)
 
 clean:
+	for dir in $(SUBDIRS); do \
+	    (cd $$dir; make clean); \
+	done
 	rm -rf *.o *.opic *~ $(DEPS) xen $(LIB)*
 
 .PHONY: clean install
