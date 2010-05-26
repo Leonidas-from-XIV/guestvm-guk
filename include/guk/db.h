@@ -33,6 +33,8 @@
 #define __DB_H__
 
 #define DEBUG_CMDLINE   "-XX:GUKDebug"
+#define DEBUG_DB   "-XX:GUKDebugDB"
+#define DEBUG_XG   "-XX:GUKDebugXG"
 
 struct app_main_args
 {
@@ -42,7 +44,9 @@ struct app_main_args
 
 void init_db_backend(struct app_main_args *aargs);
 int guk_debugging(void);
-void guk_set_debugging(int state);
+int guk_db_debugging(void);
+int guk_xg_debugging(void);
+void guk_set_debugging(char *cmd_line);
 void guk_crash_to_debugger(void);
 
 void guk_db_exit_notify_and_wait(void);
@@ -54,6 +58,5 @@ int db_is_watchpoint(unsigned long addr, struct pt_regs *regs);
 int db_watchpoint_step(struct pt_regs *regs);
 int db_is_dbaccess_addr(unsigned long addr);
 int db_is_dbaccess(void);
-
 
 #endif

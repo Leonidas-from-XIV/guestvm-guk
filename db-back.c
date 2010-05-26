@@ -90,16 +90,34 @@ struct db_watchpoint {
 #define DB_EXIT_UNSET 0
 #define DB_EXIT_SET 1
 #define DB_EXIT_DONE 2
+#define DB_NO 0
+#define DB_DB 1
+#define DB_XG 2
+
 #define DB_EXIT_FIN 3
 static int db_exit = DB_EXIT_UNSET;
-static int debug_state = 0;
+static int debug_state = DB_NO;
 
 int guk_debugging(void) {
-  return debug_state;
+  return debug_state != DB_NO;
 }
 
-void guk_set_debugging(int state) {
-  debug_state = state;
+int guk_db_debugging(void) {
+  return debug_state == DB_DB;
+}
+
+int guk_xg_debugging(void) {
+  return debug_state == DB_XG;
+}
+
+void guk_set_debugging(char *cmd_line) {
+  if (strstr(cmd_line, DEBUG_DB) != NULL) {
+    debug_state = DB_DB;
+  } else if (strstr(cmd_line, DEBUG_XG) != NULL) {
+    debug_state = DB_XG;
+  } else {
+    debug_state = DB_NO;
+  }
 }
 
 /* default implementation does nothing */

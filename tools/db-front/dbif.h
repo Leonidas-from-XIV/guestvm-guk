@@ -226,6 +226,36 @@ struct dbif_response {
 
 typedef struct dbif_response dbif_response_t;
 
+int db_attach(int domain_id);
+int db_detach(void);
+uint64_t db_read_u64(uint64_t address);
+void db_write_u64(uint64_t address, uint64_t value);
+uint16_t db_readbytes(uint64_t address, char *buffer, uint16_t n);
+uint16_t db_writebytes(uint64_t address, char *buffer, uint16_t n);
+uint16_t db_multibytebuffersize(void);
+struct db_thread* db_gather_threads(int *num);
+int db_suspend(uint16_t thread_id);
+int db_resume(uint16_t thread_id);
+int db_suspend_all(void);
+int db_resume_all(void);
+int db_single_step(uint16_t thread_id);
+struct db_regs* db_get_regs(uint16_t thread_id);
+struct thread_state* db_get_thread_state(uint16_t thread_id);
+int db_set_ip(uint16_t thread_id, uint64_t ip);
+int db_get_thread_stack(uint16_t thread_id,
+                     uint64_t *stack_start,
+                     uint64_t *stack_size);
+uint64_t db_app_specific1(uint64_t arg);
+int db_debug(int level);
+void db_signoff(void);
+
+#define READ_W 1
+#define WRITE_W 2
+#define EXEC_W 4
+#define AFTER_W 8
+int db_activate_watchpoint(uint64_t address, uint64_t size, int kind);
+int db_deactivate_watchpoint(uint64_t address, uint64_t size);
+uint64_t db_watchpoint_info(uint16_t thread_id, int *kind);
 
 DEFINE_RING_TYPES(dbif, struct dbif_request, struct dbif_response);
 

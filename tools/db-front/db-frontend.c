@@ -138,7 +138,7 @@ wait_again:
 
 /******************** Implementation of ptrace like functions *****************/
 
-uint64_t read_u64(uint64_t address)
+uint64_t db_read_u64(uint64_t address)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -159,7 +159,7 @@ uint64_t read_u64(uint64_t address)
     return rsp->ret_val;
 }
 
-void write_u64(uint64_t address, uint64_t value)
+void db_write_u64(uint64_t address, uint64_t value)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -181,12 +181,12 @@ void write_u64(uint64_t address, uint64_t value)
     TRACE("rsp: %lx", rsp->ret_val);
 }
 
-uint16_t multibytebuffersize(void)
+uint16_t db_multibytebuffersize(void)
 {
   return PAGE_SIZE;
 }
 
-uint16_t readbytes(uint64_t address, char *buffer, uint16_t n)
+uint16_t db_readbytes(uint64_t address, char *buffer, uint16_t n)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -214,7 +214,7 @@ uint16_t readbytes(uint64_t address, char *buffer, uint16_t n)
     return rsp->ret_val;
 }
 
-uint16_t writebytes(uint64_t address, char *buffer, uint16_t n)
+uint16_t db_writebytes(uint64_t address, char *buffer, uint16_t n)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -242,7 +242,7 @@ uint16_t writebytes(uint64_t address, char *buffer, uint16_t n)
     return n;
 }
 
-struct db_thread* gather_threads(int *num)
+struct db_thread* db_gather_threads(int *num)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -282,7 +282,7 @@ struct db_thread* gather_threads(int *num)
     return threads;
 }
 
-int suspend(uint16_t thread_id)
+int db_suspend(uint16_t thread_id)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -303,7 +303,7 @@ int suspend(uint16_t thread_id)
     return (int)rsp->ret_val;
 }
 
-int resume(uint16_t thread_id)
+int db_resume(uint16_t thread_id)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -324,7 +324,7 @@ int resume(uint16_t thread_id)
     return (int)rsp->ret_val;
 }
 
-int suspend_all(void) {
+int db_suspend_all(void) {
     struct dbif_request *req;
     struct dbif_response *rsp;
     RING_IDX idx;
@@ -343,7 +343,7 @@ int suspend_all(void) {
     return (int)rsp->ret_val;
 }
 
-int resume_all(void) {
+int db_resume_all(void) {
     struct dbif_request *req;
     struct dbif_response *rsp;
     RING_IDX idx;
@@ -362,7 +362,7 @@ int resume_all(void) {
     return (int)rsp->ret_val;
 }
 
-int single_step(uint16_t thread_id)
+int db_single_step(uint16_t thread_id)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -384,7 +384,7 @@ int single_step(uint16_t thread_id)
 }
 
 
-struct db_regs* get_regs(uint16_t thread_id)
+struct db_regs* db_get_regs(uint16_t thread_id)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -518,7 +518,7 @@ struct db_regs* get_regs(uint16_t thread_id)
     return regs;
 }
 
-int set_ip(uint16_t thread_id, uint64_t ip)
+int db_set_ip(uint16_t thread_id, uint64_t ip)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -540,7 +540,7 @@ int set_ip(uint16_t thread_id, uint64_t ip)
     return (int)rsp->ret_val;
 }
 
-int get_thread_stack(uint16_t thread_id, 
+int db_get_thread_stack(uint16_t thread_id, 
                      uint64_t *stack_start,
                      uint64_t *stack_size)
 {
@@ -575,7 +575,7 @@ int get_thread_stack(uint16_t thread_id,
 }
 
 
-uint64_t app_specific1(uint64_t arg)
+uint64_t db_app_specific1(uint64_t arg)
 {
     struct dbif_request *req;
     struct dbif_response *rsp;
@@ -597,7 +597,7 @@ uint64_t app_specific1(uint64_t arg)
     return rsp->ret_val;
 }
 
-int activate_watchpoint(uint64_t address, uint64_t size, int kind) {
+int db_activate_watchpoint(uint64_t address, uint64_t size, int kind) {
     struct dbif_request *req;
     struct dbif_response *rsp;
     RING_IDX idx;
@@ -618,7 +618,7 @@ int activate_watchpoint(uint64_t address, uint64_t size, int kind) {
     return rsp->ret_val;
 }
 
-int deactivate_watchpoint(uint64_t address, uint64_t size) {
+int db_deactivate_watchpoint(uint64_t address, uint64_t size) {
     struct dbif_request *req;
     struct dbif_response *rsp;
     RING_IDX idx;
@@ -638,7 +638,7 @@ int deactivate_watchpoint(uint64_t address, uint64_t size) {
     return rsp->ret_val;
 }
 
-uint64_t watchpoint_info(int16_t thread_id, int *kind) {
+uint64_t db_watchpoint_info(uint16_t thread_id, int *kind) {
     struct dbif_request *req;
     struct dbif_response *rsp;
     RING_IDX idx;

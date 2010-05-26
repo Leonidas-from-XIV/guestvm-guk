@@ -111,10 +111,9 @@ static void db_thread(void *data)
     init_db_backend((struct app_main_args *)data);
 }
 
-static void start_debugging(struct app_main_args *aargs)
+static void start_db_debugging(struct app_main_args *aargs)
 {
-    if (guk_debugging()) 
-	create_debug_thread("db-backend", db_thread, aargs);
+  create_debug_thread("db-backend", db_thread, aargs);
 }
 
 static USED unsigned long get_r14(void)
@@ -169,8 +168,8 @@ static void invoke_inits(void)
 
 static void run_main(struct app_main_args *args)
 {
-  if (trace_startup()) {
-    tprintk("Starting app_main for Guest VM microkernel, cmd_line=%s, debug_mode=%d\n",
+  if (1/*trace_startup()*/) {
+    /*t*/printk("Starting app_main for Guest VM microkernel, cmd_line=%s, debug_mode=%d\n",
 		args->cmd_line, guk_debugging());
   }
   guk_app_main(args);
@@ -243,15 +242,15 @@ void start_kernel(start_info_t *si)
 
     start_services();
 
-    guk_set_debugging(strstr((char *)si->cmd_line, DEBUG_CMDLINE) != NULL);
+    guk_set_debugging((char *)si->cmd_line);
     /* Call app_main, but only if we aren't in the debug mode */
     aargs.cmd_line = (char *)si->cmd_line;
     aargs.si_info = si;
-    if(!guk_debugging())
-    {
+    if (guk_db_debugging()) {
+	start_db_debugging(&aargs);
+    } else {
         run_main(&aargs);
-    } else
-	start_debugging(&aargs);
+    }
 
     /* Everything initialised, start idle thread */
     run_idle_thread();
