@@ -1,24 +1,24 @@
 /*
  * Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, California 95054, U.S.A. All rights reserved.
- * 
+ *
  * U.S. Government Rights - Commercial software. Government users are
  * subject to the Sun Microsystems, Inc. standard license agreement and
  * applicable provisions of the FAR and its supplements.
- * 
+ *
  * Use is subject to license terms.
- * 
+ *
  * This distribution may include materials developed by third parties.
- * 
+ *
  * Parts of the product may be derived from Berkeley BSD systems,
  * licensed from the University of California. UNIX is a registered
  * trademark in the U.S.  and in other countries, exclusively licensed
  * through X/Open Company, Ltd.
- * 
+ *
  * Sun, Sun Microsystems, the Sun logo and Java are trademarks or
  * registered trademarks of Sun Microsystems, Inc. in the U.S. and other
  * countries.
- * 
+ *
  * This product is covered and controlled by U.S. Export Control laws and
  * may be subject to the export or import laws in other
  * countries. Nuclear, missile, chemical biological weapons or nuclear
@@ -27,7 +27,7 @@
  * U.S. embargo or to entities identified on U.S. export exclusion lists,
  * including, but not limited to, the denied persons and specially
  * designated nationals lists is strictly prohibited.
- * 
+ *
  */
 /*
  ****************************************************************************
@@ -38,7 +38,7 @@
  *        File: mm.c
  *      Author: Rolf Neugebauer (neugebar@dcs.gla.ac.uk)
  *     Changes: Grzegorz Milos
- *     Changes: Harald Roeck, Sun Microsystems Inv., summer intern 2008 
+ *     Changes: Harald Roeck, Sun Microsystems Inv., summer intern 2008
  *     Changes: Mick Jordan, Sun Microsystems Inc.
  *
  *        Date: Aug 2003, changes Aug 2005
@@ -201,7 +201,7 @@ static void new_pt_frame(unsigned long pt_mfn_for_pfn, unsigned long prev_l_mfn,
  * that page. Java thread stacks, however, are not mapped 1-1.
  */
 
-static void build_pagetable_vs(unsigned long start_address, unsigned long end_address, 
+static void build_pagetable_vs(unsigned long start_address, unsigned long end_address,
 		     int page_size, pfn_alloc_env_t *env_pfn, pfn_alloc_env_t *env_npf)
 {
     static mmu_update_t mmu_updates[L1_PAGETABLE_ENTRIES + 1];
@@ -293,7 +293,7 @@ static multicall_entry_t call[1024];
  * We do not reclaim empty page table frames on the grounds that they likely
  * will be used again.
  */
-static void demolish_pagetable_vs(unsigned long start_address, unsigned long end_address, 
+static void demolish_pagetable_vs(unsigned long start_address, unsigned long end_address,
 			int page_size) {
     int i = 0;
 
@@ -360,7 +360,7 @@ static void write_protect_vs(unsigned long start_address, unsigned long end_addr
 
     if (trace_mmpt())
         tprintk("MM: page tables demolished\n");
-  
+
 }
 
 void guk_write_protect(unsigned long start_address, unsigned long end_address) {
@@ -409,11 +409,11 @@ void arch_init_mm(unsigned long* free_pfn_ptr, unsigned long* max_pfn_ptr)
     }
 
     /* start_address is the virtual address of the page after the page frames
-     * allocated by the domain builder. We assume that addresses from 0 to start_address-1 
-     * have been mapped by the domain builder. Note that, although the initial page frames 
+     * allocated by the domain builder. We assume that addresses from 0 to start_address-1
+     * have been mapped by the domain builder. Note that, although the initial page frames
      * themselves are all mapped, the last frame is likely not full. The pfns between
      * *free_pfn_ptr and start_pfn are available, and used here for additional page frames
-     * as needed. 
+     * as needed.
      */
     start_pfn = (start_info.nr_pt_frames - NOT_L1_FRAMES) * L1_PAGETABLE_ENTRIES;
 
@@ -437,9 +437,9 @@ void arch_init_mm(unsigned long* free_pfn_ptr, unsigned long* max_pfn_ptr)
 
 int guk_unmap_page_pfn(unsigned long addr, unsigned long pfn) {
     pte_t val = __pte(pfn_to_mfn(pfn) << PAGE_SHIFT);
-    return HYPERVISOR_update_va_mapping(PAGE_ALIGN(addr), 
-	    val, 
-	    (unsigned long)UVMF_ALL | UVMF_INVLPG);  
+    return HYPERVISOR_update_va_mapping(PAGE_ALIGN(addr),
+	    val,
+	    (unsigned long)UVMF_ALL | UVMF_INVLPG);
 }
 
 int guk_unmap_page(unsigned long addr)
@@ -448,15 +448,15 @@ int guk_unmap_page(unsigned long addr)
 }
 
 int guk_clear_pte(unsigned long addr) {
-    return HYPERVISOR_update_va_mapping(PAGE_ALIGN(addr), 
+    return HYPERVISOR_update_va_mapping(PAGE_ALIGN(addr),
 	    __pte(0),
 	    (unsigned long)UVMF_ALL | UVMF_INVLPG);
-  
+
 }
 
 int guk_remap_page_pfn(unsigned long addr, unsigned long pfn) {
     pte_t val = __pte( (pfn_to_mfn(pfn) << PAGE_SHIFT) | L1_PROT );
-    return HYPERVISOR_update_va_mapping(PAGE_ALIGN(addr), 
+    return HYPERVISOR_update_va_mapping(PAGE_ALIGN(addr),
 	    val,
 	    (unsigned long)UVMF_ALL | UVMF_INVLPG);
 }
@@ -480,7 +480,10 @@ long guk_not11_virt_to_pfn(unsigned long addr, unsigned long *pte_ptr) {
     case 1: offset = l1_table_offset(addr); break;
     }
     pte = tab[offset];
-    if (level > 1 && !(pte & _PAGE_PRESENT)) return -1;
+    if (level > 1 && !(pte & _PAGE_PRESENT)) {
+    	xprintk("guk_not11_virt_to_pfn NOT PRESENT addr %lx, level %d, offset %d, pte %lx\n", addr, level, offset, pte);
+    	return -1;
+    }
     pfn = mfn_to_pfn(pte_to_mfn(pte));
     tab = to_virt(pfn << PAGE_SHIFT);
     level--;
