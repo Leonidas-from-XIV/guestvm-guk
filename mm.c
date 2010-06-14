@@ -1,24 +1,24 @@
 /*
  * Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, California 95054, U.S.A. All rights reserved.
- * 
+ *
  * U.S. Government Rights - Commercial software. Government users are
  * subject to the Sun Microsystems, Inc. standard license agreement and
  * applicable provisions of the FAR and its supplements.
- * 
+ *
  * Use is subject to license terms.
- * 
+ *
  * This distribution may include materials developed by third parties.
- * 
+ *
  * Parts of the product may be derived from Berkeley BSD systems,
  * licensed from the University of California. UNIX is a registered
  * trademark in the U.S.  and in other countries, exclusively licensed
  * through X/Open Company, Ltd.
- * 
+ *
  * Sun, Sun Microsystems, the Sun logo and Java are trademarks or
  * registered trademarks of Sun Microsystems, Inc. in the U.S. and other
  * countries.
- * 
+ *
  * This product is covered and controlled by U.S. Export Control laws and
  * may be subject to the export or import laws in other
  * countries. Nuclear, missile, chemical biological weapons or nuclear
@@ -27,7 +27,7 @@
  * U.S. embargo or to entities identified on U.S. export exclusion lists,
  * including, but not limited to, the denied persons and specially
  * designated nationals lists is strictly prohibited.
- * 
+ *
  */
 /*
  ****************************************************************************
@@ -92,7 +92,7 @@
  * are allocated in specific areas of virtual memory that are mapped
  * to the physical memory allocated from here. However, since physical memory
  * and virtual memory are still also mapped 1-1, it is possible to
- * view this as also allocating virtual memory. That fact is used by the 
+ * view this as also allocating virtual memory. That fact is used by the
  * microkernel and also by Java when allocating miscellaneous data.
  *
  * There is one downside to this arrangement, which is that physical
@@ -125,7 +125,7 @@ static DEFINE_SPINLOCK(bitmap_lock);
  * to avoid unnecessary fragmentation.
  *
  * The small region is sized in proportion to the maximum memory
- * and if we run out we fail over the laarge region. If we fail to allocate 
+ * and if we run out we fail over the laarge region. If we fail to allocate
  * in the large region will try to get more memory from Xen and retry.
  */
 
@@ -175,7 +175,7 @@ static unsigned long can_increase(unsigned long n);
 #ifdef MACHINE_ALLOC
 /*
  * Experimental support for allocating contiguous
- * physical memory to support 2MB pages, which should be the default for 
+ * physical memory to support 2MB pages, which should be the default for
  * heap and code. Xen doesn't currently support this however.
  */
 
@@ -424,7 +424,7 @@ static void static_dump_page_pool_state(printk_function_ptr printk_function) {
     }
   }
   list_for_each(list, &memory_hole_list) {
-    memory_hole = list_entry(list, memory_hole_t, memory_hole_next);    
+    memory_hole = list_entry(list, memory_hole_t, memory_hole_next);
     (*printk_function)("%d .. %d unavailable\n", memory_hole->start_pfn, memory_hole->end_pfn - 1);
     unavailable += (memory_hole->end_pfn - memory_hole->start_pfn);
   }
@@ -515,9 +515,9 @@ unsigned long guk_decreaseable_page_pool(void) {
 
 /* A free(p) may callback to deallocate_pages so must release the lock */
 void unlocked_free(void *p) {
-    spin_unlock(&bitmap_lock); 
+    spin_unlock(&bitmap_lock);
     free(p);
-    spin_lock(&bitmap_lock);    
+    spin_lock(&bitmap_lock);
 }
 
 /* add to memory_hole_list keeping it ordered by start_pfn */
@@ -530,7 +530,7 @@ void memory_hole_add(memory_hole_t *new_memory_hole) {
     }
     list_add_tail(&new_memory_hole->memory_hole_next, list);
 }
-  
+
 /* If there are n pages free somewhere in the bulk section of the page pool, decrease our
    reservation by that amount. */
 long guk_decrease_page_pool(unsigned long n) {
@@ -548,7 +548,7 @@ long guk_decrease_page_pool(unsigned long n) {
 	  page--; nn++;
 	}
 	/* May get called back for small pages so unlock */
-	spin_unlock(&bitmap_lock); 
+	spin_unlock(&bitmap_lock);
 	memory_hole_t *memory_hole = xmalloc(memory_hole_t);
 	memory_hole->start_pfn = page + 1;
 	memory_hole->end_pfn = npage;
@@ -580,18 +580,19 @@ long guk_decrease_page_pool(unsigned long n) {
       }
       page--;
     }
-    spin_unlock(&bitmap_lock); 
+    spin_unlock(&bitmap_lock);
     return rc;
 }
 
 /*
  * Allocate n contiguous pages. Returns a VIRTUAL/PHYSICAL address.
  */
-static unsigned long _allocate_pages(int n, int type) 
+static unsigned long _allocate_pages(int n, int type)
 {
     int page;
     unsigned long result = 0;
     int is_bulk_alloc = is_bulk(n);
+    int initial_is_bulk_alloc = is_bulk_alloc;
 
     BUG_ON(in_irq());
     if (trace_mm()) {
@@ -637,7 +638,7 @@ static unsigned long _allocate_pages(int n, int type)
         }
         page++;
       }
-  
+
       if (result > 0) break;
       else {
 	if (!is_bulk_alloc) {
@@ -654,7 +655,7 @@ static unsigned long _allocate_pages(int n, int type)
     if (trace_mm()) {
       ttprintk("APX %lx %d %d %d\n", result, n, first_free_page, first_free_bulk_page);
     }
-    if (result == 0 && !is_bulk_alloc) {
+    if (result == 0 && !initial_is_bulk_alloc) {
       crash_exit_msg("failed to allocate small pages");
     }
     return result;
@@ -668,7 +669,12 @@ unsigned long alloc_pages(int order) {
 /* Allocate n contiguous pages. Returns a VIRTUAL address.
 */
 unsigned long guk_allocate_pages(int n, int type) {
-  return _allocate_pages(n, type);
+	unsigned long result = _allocate_pages(n, type);
+	if (result == 0) {
+		xprintk("guk_allocate_pages failed %d %d\n", n, type);
+		crash_exit_backtrace();
+	}
+  return result;
 }
 
 unsigned long guk_extend_allocate_pages(void *pointer, int n, int type) {
@@ -913,14 +919,14 @@ void init_mm(char *cmd_line)
     /*
      * now we can initialise the page allocator
      */
-    if (trace_mm()) 
+    if (trace_mm())
 	tprintk("MM: initialise page allocator for %lx-%lx\n",
            pt_pfn, max_pfn);
-    
+
     barrier();
 
     init_page_allocator(cmd_line, pt_pfn, max_pfn);
-    
+
     resize_phys_to_machine_mapping_table();
 
     arch_init_p2m(max_pfn, max_end_alloc_page);
