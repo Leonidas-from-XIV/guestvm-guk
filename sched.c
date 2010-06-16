@@ -795,12 +795,15 @@ static struct thread* create_thread_with_id_stack(char *name,
 
     /* Call architecture specific setup. */
     thread = arch_create_thread(name, function, stack, stack_size, data);
+    if (thread == NULL) {
+    	return NULL;
+    }
     /* Not runnable, not exited, not sleeping, maybe ukernel thread */
     thread->flags = flags;
     thread->regs = NULL;
     thread->fpregs = (struct fp_regs *)alloc_page();
     if (thread->fpregs == (struct fp_regs *) 0) {
-    	return 0;
+    	return NULL;
     }
     thread->fpregs->mxcsr = MXCSRINIT;
     /* stack != NULL means Java Thread */
