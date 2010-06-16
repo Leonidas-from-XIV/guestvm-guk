@@ -449,8 +449,8 @@ static long increase_memory_holding_lock(unsigned long n) {
     static_dump_page_pool_state(xprintk);
     crash_exit_msg("recursive entry to increase_memory");
 #else
-    xprintk("recursive entry to increase_memory\n");
-    backtrace(get_bp(), 0);
+//    xprintk("recursive entry to increase_memory\n");
+//    backtrace(get_bp(), 0);
     in_increase_memory = 0;
     return 0;
 #endif
@@ -669,7 +669,7 @@ static unsigned long _allocate_pages(int n, int type)
 #ifdef MM_CRASH_ON_FAILURE
       crash_exit_msg("failed to allocate small pages");
 #else
-      xprintk("failed to allocate %d small pages of type %d\n", n, type);
+//      xprintk("failed to allocate %d small pages of type %d\n", n, type);
 #endif
     }
     return result;
