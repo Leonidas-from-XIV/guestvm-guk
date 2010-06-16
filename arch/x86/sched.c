@@ -1,24 +1,24 @@
 /*
  * Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, California 95054, U.S.A. All rights reserved.
- * 
+ *
  * U.S. Government Rights - Commercial software. Government users are
  * subject to the Sun Microsystems, Inc. standard license agreement and
  * applicable provisions of the FAR and its supplements.
- * 
+ *
  * Use is subject to license terms.
- * 
+ *
  * This distribution may include materials developed by third parties.
- * 
+ *
  * Parts of the product may be derived from Berkeley BSD systems,
  * licensed from the University of California. UNIX is a registered
  * trademark in the U.S.  and in other countries, exclusively licensed
  * through X/Open Company, Ltd.
- * 
+ *
  * Sun, Sun Microsystems, the Sun logo and Java are trademarks or
  * registered trademarks of Sun Microsystems, Inc. in the U.S. and other
  * countries.
- * 
+ *
  * This product is covered and controlled by U.S. Export Control laws and
  * may be subject to the export or import laws in other
  * countries. Nuclear, missile, chemical biological weapons or nuclear
@@ -27,7 +27,7 @@
  * U.S. embargo or to entities identified on U.S. export exclusion lists,
  * including, but not limited to, the denied persons and specially
  * designated nationals lists is strictly prohibited.
- * 
+ *
  */
 /*
  ****************************************************************************
@@ -84,7 +84,7 @@
  * print a backtrace of the native code; use base frame register to find the stack frames
  *
  * prints the address of the functions; to get to the code use comamnd line
- *  % gaddr2line -e guestvm <addr> 
+ *  % gaddr2line -e guestvm <addr>
  * this will print the filename and the line in the file the code address belongs to
  */
 void guk_backtrace(void **bp, void *ip)
@@ -153,6 +153,9 @@ struct thread* arch_create_thread(char *name,
     struct thread *thread;
 
     thread = xmalloc(struct thread);
+    if (thread == NULL) {
+    	return NULL;
+    }
     /* Allocate 2^STACK_SIZE_PAGE_ORDER pages for stack,
      * stack will be aligned. Required for 'current' macro.
      * We also give the option to provide a stack allocated elsewhere */
@@ -165,6 +168,10 @@ struct thread* arch_create_thread(char *name,
     else
     {
         thread->stack = (char *)alloc_pages(STACK_SIZE_PAGE_ORDER);
+        if (thread->stack == NULL) {
+        	free(thread);
+        	return NULL;
+        }
         thread->guk_stack_allocated = 1;
         thread->stack_size = STACK_SIZE;
     }
@@ -172,7 +179,7 @@ struct thread* arch_create_thread(char *name,
     thread->name = name;
     thread->sp = (unsigned long)thread->stack + thread->stack_size;
 
-    /* push the local space onto the stack, this value will be put into register R14 
+    /* push the local space onto the stack, this value will be put into register R14
      * by the startup assembler code  */
     stack_push(thread, (unsigned long) get_local_space());
     stack_push(thread, (unsigned long) function);

@@ -1,24 +1,24 @@
 /*
  * Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, California 95054, U.S.A. All rights reserved.
- * 
+ *
  * U.S. Government Rights - Commercial software. Government users are
  * subject to the Sun Microsystems, Inc. standard license agreement and
  * applicable provisions of the FAR and its supplements.
- * 
+ *
  * Use is subject to license terms.
- * 
+ *
  * This distribution may include materials developed by third parties.
- * 
+ *
  * Parts of the product may be derived from Berkeley BSD systems,
  * licensed from the University of California. UNIX is a registered
  * trademark in the U.S.  and in other countries, exclusively licensed
  * through X/Open Company, Ltd.
- * 
+ *
  * Sun, Sun Microsystems, the Sun logo and Java are trademarks or
  * registered trademarks of Sun Microsystems, Inc. in the U.S. and other
  * countries.
- * 
+ *
  * This product is covered and controlled by U.S. Export Control laws and
  * may be subject to the export or import laws in other
  * countries. Nuclear, missile, chemical biological weapons or nuclear
@@ -27,7 +27,7 @@
  * U.S. embargo or to entities identified on U.S. export exclusion lists,
  * including, but not limited to, the denied persons and specially
  * designated nationals lists is strictly prohibited.
- * 
+ *
  */
 /*
  ****************************************************************************
@@ -103,7 +103,7 @@
 #define DEFAULT_TIMESLICE_MS 10
 #define TRACE_CPU_OPTION "-XX:GUKCT"
 
-/* 
+/*
  * The choice of cpu for a newly created thread is random and threads
  * may switch between cpus depending on which cpu happens to be executing schedule
  * when they are at the head of the ready queue.
@@ -348,7 +348,7 @@ void guk_detach_from_appsched(struct thread *thread)
 #define MAX_SLEEP 10
 /* Find the time when the next timeout expires for the give CPU.
  * For Java threads, we only check those on this CPU.
- * 10s if no thread's waiting to be woken up. 
+ * 10s if no thread's waiting to be woken up.
  */
 s_time_t blocking_time(int cpu)
 {
@@ -553,7 +553,7 @@ static inline struct thread *pick_thread(struct thread *prev, int cpu)
      */
     i = 0;
     list_for_each(t, &ready_queue) {
-	if(++i > thread_id) { /* if ready queue is corrupted we hang in this loop; 
+	if(++i > thread_id) { /* if ready queue is corrupted we hang in this loop;
 				 try to break out and raise a BUG */
 	    spin_unlock_irqrestore(&ready_lock, flags);
     print_queues();
@@ -670,11 +670,11 @@ void guk_schedule(void)
         this_cpu(current_thread) = next;
 	if (1/*!is_ukernel(prev)*/) {
 	  struct fp_regs *fpregs = prev->fpregs;
-	  asm (save_fp_regs_asm : : [fpr] "r" (fpregs));	  
+	  asm (save_fp_regs_asm : : [fpr] "r" (fpregs));
 	}
 	if (1/*!is_ukernel(next)*/) {
 	  struct fp_regs *fpregs = next->fpregs;
-	  asm (restore_fp_regs_asm : : [fpr] "r" (fpregs));	  
+	  asm (restore_fp_regs_asm : : [fpr] "r" (fpregs));
 	}
         switch_threads(prev, next, prev);
 
@@ -799,6 +799,9 @@ static struct thread* create_thread_with_id_stack(char *name,
     thread->flags = flags;
     thread->regs = NULL;
     thread->fpregs = (struct fp_regs *)alloc_page();
+    if (thread->fpregs == (struct fp_regs *) 0) {
+    	return 0;
+    }
     thread->fpregs->mxcsr = MXCSRINIT;
     /* stack != NULL means Java Thread */
     if (stack == NULL || !upcalls_active) {
@@ -824,7 +827,7 @@ static struct thread* create_thread_with_id_stack(char *name,
     BUG_ON(thread->id == 0);
 
     if (trace_sched() || trace_mm() || trace_startup())
-	ttprintk("CT %d %s %d %x %lx\n", 
+	ttprintk("CT %d %s %d %x %lx\n",
 		thread->id, name, thread->cpu, thread->flags, thread->sp);
 
     wake(thread);
@@ -937,7 +940,7 @@ void exit_thread(void)
 }
 
 /*
- * mark thread as not runnable, thread is usually the current thread. make sure it is in 
+ * mark thread as not runnable, thread is usually the current thread. make sure it is in
  * some waiting queue before calling this, because after this call it could be preempted
  * immediately and not rescheduled again
  */
@@ -1232,7 +1235,7 @@ void trace_cpu_idle(int cpu) {
     local_irq_disable();
     block_domain(NOW() + SECONDS(1)); /* enables interrupts */
     guk_trace_cpu_fn();
-  } 
+  }
 }
 
 extern void timer_handler(evtchn_port_t ev, void *ign);
@@ -1281,7 +1284,7 @@ void idle_thread_fn(void *data)
 	 * check for ready threads again */
 	if (until > 0 && !runnable_threads(cpu)) {
             if (trace_sched()) ttprintk("BI %ld\n", until);
-            
+
 	    block_domain(until); /* enables interrupts */
 
             if (trace_sched()) ttprintk("WI\n");

@@ -1,24 +1,24 @@
 /*
  * Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, California 95054, U.S.A. All rights reserved.
- * 
+ *
  * U.S. Government Rights - Commercial software. Government users are
  * subject to the Sun Microsystems, Inc. standard license agreement and
  * applicable provisions of the FAR and its supplements.
- * 
+ *
  * Use is subject to license terms.
- * 
+ *
  * This distribution may include materials developed by third parties.
- * 
+ *
  * Parts of the product may be derived from Berkeley BSD systems,
  * licensed from the University of California. UNIX is a registered
  * trademark in the U.S.  and in other countries, exclusively licensed
  * through X/Open Company, Ltd.
- * 
+ *
  * Sun, Sun Microsystems, the Sun logo and Java are trademarks or
  * registered trademarks of Sun Microsystems, Inc. in the U.S. and other
  * countries.
- * 
+ *
  * This product is covered and controlled by U.S. Export Control laws and
  * may be subject to the export or import laws in other
  * countries. Nuclear, missile, chemical biological weapons or nuclear
@@ -27,7 +27,7 @@
  * U.S. embargo or to entities identified on U.S. export exclusion lists,
  * including, but not limited to, the denied persons and specially
  * designated nationals lists is strictly prohibited.
- * 
+ *
  */
 /*
  ****************************************************************************
@@ -63,7 +63,7 @@
 #define NR_GRANT_ENTRIES (NR_GRANT_FRAMES * PAGE_SIZE / sizeof(grant_entry_t))
 
 /* synchronize access to the free list to prevent races between
- * get_free_entry and put_free_entry 
+ * get_free_entry and put_free_entry
  */
 static DEFINE_SPINLOCK(gnttab_lock);
 static grant_entry_t *gnttab_table;
@@ -89,7 +89,7 @@ put_free_entry(grant_ref_t ref)
 static grant_ref_t
 get_free_entry(void)
 {
-    unsigned int ref; 
+    unsigned int ref;
     int flags;
     spin_lock_irqsave(&gnttab_lock, flags);
     ref = gnttab_list[0];
@@ -204,7 +204,7 @@ void gnttab_suspend(void)
     int i;
 
     for (i=0; i < NR_GRANT_FRAMES; i++)
-	HYPERVISOR_update_va_mapping((unsigned long)(((char *)gnttab_table) + PAGE_SIZE*i), 
+	HYPERVISOR_update_va_mapping((unsigned long)(((char *)gnttab_table) + PAGE_SIZE*i),
 		(pte_t){0x0<<PAGE_SHIFT}, UVMF_INVLPG);
 
     ++gnttab_suspended;
@@ -215,7 +215,7 @@ static int init_frames(unsigned long *frames, int num_frames)
     struct gnttab_setup_table setup;
     int i;
     int r;
-    
+
     for (i = NR_RESERVED_ENTRIES; i < NR_GRANT_ENTRIES; i++)
         put_free_entry(i);
 
@@ -237,7 +237,7 @@ void gnttab_resume(void)
     unsigned long frames[NR_GRANT_FRAMES];
     int i;
 
-    if (trace_gnttab()) 
+    if (trace_gnttab())
 	tprintk("GT: initialising gnttab on resume\n");
 
     BUG_ON(gnttab_suspended != 1);
@@ -246,14 +246,14 @@ void gnttab_resume(void)
     init_frames(frames, NR_GRANT_FRAMES);
 
     for(i=0; i < NR_GRANT_FRAMES; ++i) {
-	HYPERVISOR_update_va_mapping((unsigned long)(((char *)gnttab_table) + PAGE_SIZE*i), 
+	HYPERVISOR_update_va_mapping((unsigned long)(((char *)gnttab_table) + PAGE_SIZE*i),
 		(pte_t){(frames[i] << PAGE_SHIFT) | L1_PROT}, UVMF_INVLPG);
 
     }
     --gnttab_suspended;
 }
 
-unsigned long pfn_gntframe_alloc(pfn_alloc_env_t *env, unsigned long addr) {
+long pfn_gntframe_alloc(pfn_alloc_env_t *env, unsigned long addr) {
   unsigned long *frames = (unsigned long *)env->data;
   return frames[env->pfn++];;
 }
@@ -266,7 +266,7 @@ void init_gnttab(void)
 
     /* The following call populates frames with mfns (from Xen) for the shared grant table. */
     init_frames(frames, NR_GRANT_FRAMES);
-    /* We map the grant table at the first virtual address after the maximum machine ram  */    
+    /* We map the grant table at the first virtual address after the maximum machine ram  */
     gnttab_table = pfn_to_virt(maximum_ram_page());
 
     struct pfn_alloc_env pfn_pageframe_env = {

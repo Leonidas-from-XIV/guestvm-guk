@@ -41,7 +41,7 @@
  *     Changes: Harald Roeck, Sun Microsystems Inv., summer intern 2008
  *     Changes: Mick Jordan, Sun Microsystems Inc.
  *
- *        Date: Aug 2003, changes Aug 2005
+ *        Date: Aug 2003, changes Aug 2005, 2008, 2009, 2010
  *
  * Environment: Guest VM microkernel evolved from Xen Minimal OS
  * Description: Arch specific memory management related functions (pagetables)
@@ -86,17 +86,16 @@
 
 /* This function simply returns physical memory in a linear manner starting at env->pfn.
  */
-unsigned long guk_pfn_linear_alloc(pfn_alloc_env_t *env, unsigned long addr) {
+long guk_pfn_linear_alloc(pfn_alloc_env_t *env, unsigned long addr) {
   return pfn_to_mfn(env->pfn++);
 }
 
 /* This function allocates an already mapped page as the physical memory to use.
  */
-unsigned long guk_pfn_alloc_alloc(pfn_alloc_env_t *env, unsigned long addr) {
+long guk_pfn_alloc_alloc(pfn_alloc_env_t *env, unsigned long addr) {
   unsigned long va = allocate_pages(1, PAGE_FRAME_VM);
   if (va == 0) {
-    xprintk("failed to allocate page frame\n");
-    crash_exit();
+	  return -1;
   }
   return pfn_to_mfn(virt_to_pfn(va));
 }
@@ -114,7 +113,7 @@ static void new_pt_frame(unsigned long pt_mfn_for_pfn, unsigned long prev_l_mfn,
 
     prot_e = prot_t = pincmd = 0;
     if (trace_mmpt()) {
-        tprintk("MM: allocating new L%d pt frame, pt_pfn=%lx, offset=%lx\n",
+        ttprintk("MM: allocating new L%d pt frame, pt_pfn=%lx, offset=%lx\n",
            level, pt_pfn, offset);
     }
 
@@ -199,19 +198,21 @@ static void new_pt_frame(unsigned long pt_mfn_for_pfn, unsigned long prev_l_mfn,
  * Generally, virtual memory is mapped 1-1 to physical memory, i.e., env_pfn->pfn_alloc
  * returns the same value as virt_to_pfn(a) where a is the virtual address being mapped to
  * that page. Java thread stacks, however, are not mapped 1-1.
+ *
+ * Return 1 if successful, 0 on allocation failure.
+ * Page table update failures cause a crash.
  */
 
-static void build_pagetable_vs(unsigned long start_address, unsigned long end_address,
+static int build_pagetable_vs(unsigned long start_address, unsigned long end_address,
 		     int page_size, pfn_alloc_env_t *env_pfn, pfn_alloc_env_t *env_npf)
 {
-    static mmu_update_t mmu_updates[L1_PAGETABLE_ENTRIES + 1];
+    mmu_update_t mmu_updates[L1_PAGETABLE_ENTRIES + 1];
     pgentry_t *tab = (pgentry_t *)start_info.pt_base, page;
     unsigned long mfn;
     unsigned long offset;
     int count = 0;
 
-    if (trace_mmpt())
-	tprintk("MM: mapping memory range 0x%lx - 0x%lx\n", start_address, end_address);
+    if (trace_mmpt()) ttprintk("MM: mapping memory range 0x%lx - 0x%lx\n", start_address, end_address);
 
     while(start_address < end_address)
     {
@@ -220,9 +221,15 @@ static void build_pagetable_vs(unsigned long start_address, unsigned long end_ad
 
 #if defined(__x86_64__)
         offset = l4_table_offset(start_address);
-        if(!(tab[offset] & _PAGE_PRESENT))
-	  /* Need new L3 pt frame */
-	  new_pt_frame(env_npf->pfn_alloc(env_npf, start_address), mfn, offset, L3_FRAME);
+        if(!(tab[offset] & _PAGE_PRESENT)) {
+	        /* Need new L3 pt frame */
+        	long npf_pfn = env_npf->pfn_alloc(env_npf, start_address);
+        	if (npf_pfn < 0) {
+        		return 0;
+        	} else {
+        		new_pt_frame(npf_pfn, mfn, offset, L3_FRAME);
+        	}
+        }
 
         page = tab[offset];
         mfn = pte_to_mfn(page);
@@ -230,9 +237,15 @@ static void build_pagetable_vs(unsigned long start_address, unsigned long end_ad
 #endif
 #if defined(__x86_64__) || defined(CONFIG_X86_PAE)
         offset = l3_table_offset(start_address);
-        if(!(tab[offset] & _PAGE_PRESENT))
-        /* Need new L2 pt frame */
-	  new_pt_frame(env_npf->pfn_alloc(env_npf, start_address), mfn, offset, L2_FRAME);
+        if(!(tab[offset] & _PAGE_PRESENT)) {
+            /* Need new L2 pt frame */
+        	long npf_pfn = env_npf->pfn_alloc(env_npf, start_address);
+        	if (npf_pfn < 0) {
+        		return 0;
+        	} else {
+        		new_pt_frame(npf_pfn, mfn, offset, L2_FRAME);
+        	}
+        }
 
         page = tab[offset];
         mfn = pte_to_mfn(page);
@@ -241,16 +254,26 @@ static void build_pagetable_vs(unsigned long start_address, unsigned long end_ad
         offset = l2_table_offset(start_address);
 
 	if (page_size == PAGE_SIZE) {
-	  /* Need new L1 pt frame */
-	  if(!(tab[offset] & _PAGE_PRESENT))
-	    new_pt_frame(env_npf->pfn_alloc(env_npf, start_address), mfn, offset, L1_FRAME);
+	  if(!(tab[offset] & _PAGE_PRESENT)) {
+	      /* Need new L1 pt frame */
+      	  long npf_pfn = env_npf->pfn_alloc(env_npf, start_address);
+      	  if (npf_pfn < 0) {
+      		  return 0;
+      	  } else {
+      		  new_pt_frame(npf_pfn, mfn, offset, L1_FRAME);
+      	  }
+	  }
 
 	  page = tab[offset];
 	  mfn = pte_to_mfn(page);
 	  offset = l1_table_offset(start_address);
 	}
 
-	unsigned long mfn_for_pfn = env_pfn->pfn_alloc(env_pfn, start_address);
+	long mfn_for_pfn = env_pfn->pfn_alloc(env_pfn, start_address);
+	if (mfn_for_pfn < 0) {
+		return 0;
+	}
+
 	if (mfn_for_pfn > 0) {
 	  mmu_updates[count].ptr = ((pgentry_t)mfn << PAGE_SHIFT) + sizeof(pgentry_t) * offset;
 	  if (page_size == PAGE_SIZE) {
@@ -272,22 +295,19 @@ static void build_pagetable_vs(unsigned long start_address, unsigned long end_ad
         }
     }
 
-    if (trace_mmpt())
-        tprintk("MM: page tables setup\n");
-
+    if (trace_mmpt()) ttprintk("MM: page tables setup\n");
+    return 1;
 }
 
-void guk_build_pagetable(unsigned long start_address, unsigned long end_address,
+int guk_build_pagetable(unsigned long start_address, unsigned long end_address,
 		     pfn_alloc_env_t *env_pfn, pfn_alloc_env_t *env_npf) {
-  build_pagetable_vs(start_address, end_address, PAGE_SIZE, env_pfn, env_npf);
+  return build_pagetable_vs(start_address, end_address, PAGE_SIZE, env_pfn, env_npf);
 }
 
-void guk_build_pagetable_2mb(unsigned long start_address, unsigned long end_address,
+int guk_build_pagetable_2mb(unsigned long start_address, unsigned long end_address,
 			 pfn_alloc_env_t *env_pfn, pfn_alloc_env_t *env_npf) {
-  build_pagetable_vs(start_address, end_address, PAGE_SIZE * 512, env_pfn, env_npf);
+  return build_pagetable_vs(start_address, end_address, PAGE_SIZE * 512, env_pfn, env_npf);
 }
-
-static multicall_entry_t call[1024];
 
 /* Clears the page table entries for the given address range and invalidates TLB.
  * We do not reclaim empty page table frames on the grounds that they likely
@@ -296,9 +316,9 @@ static multicall_entry_t call[1024];
 static void demolish_pagetable_vs(unsigned long start_address, unsigned long end_address,
 			int page_size) {
     int i = 0;
+    multicall_entry_t call[1024];
 
-    if (trace_mmpt())
-	tprintk("MM: unmapping memory range 0x%lx - 0x%lx\n", start_address, end_address);
+    if (trace_mmpt()) ttprintk("MM: unmapping memory range 0x%lx - 0x%lx\n", start_address, end_address);
 
     while (start_address < end_address)
     {
@@ -319,8 +339,7 @@ static void demolish_pagetable_vs(unsigned long start_address, unsigned long end
 	i++;
     }
 
-    if (trace_mmpt())
-        tprintk("MM: page tables demolished\n");
+    if (trace_mmpt()) ttprintk("MM: page tables demolished\n");
 }
 
 void guk_demolish_pagetable(unsigned long start_address, unsigned long end_address) {
@@ -333,9 +352,9 @@ void guk_demolish_pagetable_2mb(unsigned long start_address, unsigned long end_a
 
 static void write_protect_vs(unsigned long start_address, unsigned long end_address, int page_size) {
     int i = 0;
+    multicall_entry_t call[1024];
 
-    if (trace_mmpt())
-	tprintk("MM: write protecting memory range 0x%lx - 0x%lx\n", start_address, end_address);
+    if (trace_mmpt()) ttprintk("MM: write protecting memory range 0x%lx - 0x%lx\n", start_address, end_address);
 
     while (start_address < end_address)
     {
@@ -358,8 +377,7 @@ static void write_protect_vs(unsigned long start_address, unsigned long end_addr
 	i++;
     }
 
-    if (trace_mmpt())
-        tprintk("MM: page tables demolished\n");
+    if (trace_mmpt()) ttprintk("MM: page tables demolished\n");
 
 }
 

@@ -1,24 +1,24 @@
 /*
  * Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, California 95054, U.S.A. All rights reserved.
- * 
+ *
  * U.S. Government Rights - Commercial software. Government users are
  * subject to the Sun Microsystems, Inc. standard license agreement and
  * applicable provisions of the FAR and its supplements.
- * 
+ *
  * Use is subject to license terms.
- * 
+ *
  * This distribution may include materials developed by third parties.
- * 
+ *
  * Parts of the product may be derived from Berkeley BSD systems,
  * licensed from the University of California. UNIX is a registered
  * trademark in the U.S.  and in other countries, exclusively licensed
  * through X/Open Company, Ltd.
- * 
+ *
  * Sun, Sun Microsystems, the Sun logo and Java are trademarks or
  * registered trademarks of Sun Microsystems, Inc. in the U.S. and other
  * countries.
- * 
+ *
  * This product is covered and controlled by U.S. Export Control laws and
  * may be subject to the export or import laws in other
  * countries. Nuclear, missile, chemical biological weapons or nuclear
@@ -27,7 +27,7 @@
  * U.S. embargo or to entities identified on U.S. export exclusion lists,
  * including, but not limited to, the denied persons and specially
  * designated nationals lists is strictly prohibited.
- * 
+ *
  */
 /*
  *
@@ -40,16 +40,16 @@
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
 
@@ -122,6 +122,7 @@ typedef struct pfn_alloc_env pfn_alloc_env_t;
  * and pfn_alloc is the function that actually returns the physical
  * page to be used for the given virtual address addr.
  * A return value of zero is interpreted as a request to not map that page.
+ * A return value of < 0 implies an allocation error.
  * The data field can be used for arbitrary custom state as needed.
  * N.B. pfn_alloc actually returns the machine page, i.e., typically the
  * result of calling pfn_to_mfn, since this is what build_pagetable
@@ -130,21 +131,27 @@ typedef struct pfn_alloc_env pfn_alloc_env_t;
  */
 struct pfn_alloc_env {
     void *data;
-    unsigned long pfn;
-    unsigned long (*pfn_alloc)(pfn_alloc_env_t *env, unsigned long addr);
+    long pfn;
+    long (*pfn_alloc)(pfn_alloc_env_t *env, unsigned long addr);
 };
 /* This function simply returns physical memory in a linear manner starting at env->pfn.
+ * This does not allocate so cannot fail.
  */
-unsigned long guk_pfn_linear_alloc(pfn_alloc_env_t *env, unsigned long addr);
+long guk_pfn_linear_alloc(pfn_alloc_env_t *env, unsigned long addr);
 /* This function allocates an already mapped page as the physical memory to use.
+ * Returns -1 if the allocation fails.
  */
-unsigned long guk_pfn_alloc_alloc(pfn_alloc_env_t *env, unsigned long addr);
+long guk_pfn_alloc_alloc(pfn_alloc_env_t *env, unsigned long addr);
 
-/* Build 4K page tables for given address range */
-void guk_build_pagetable(unsigned long start_address, unsigned long end_address,
+/* Build 4K page tables for given address range.
+ * Returns 1 if successful, 0 on allocation failure.
+ */
+int guk_build_pagetable(unsigned long start_address, unsigned long end_address,
 		     pfn_alloc_env_t *env_pfn, pfn_alloc_env_t *env_npf);
-/* Build 2MB page tables for given address range */
-void guk_build_pagetable_2mb(unsigned long start_address, unsigned long end_address,
+/* Build 2MB page tables for given address range.
+ * Returns 1 if successful, 0 on allocation failure.
+  */
+int guk_build_pagetable_2mb(unsigned long start_address, unsigned long end_address,
 		     pfn_alloc_env_t *env_pfn, pfn_alloc_env_t *env_npf);
 /* Reverse operations, tear down existing tables for given address range */
 void guk_demolish_pagetable(unsigned long start_address, unsigned long end_address);

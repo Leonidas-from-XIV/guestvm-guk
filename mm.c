@@ -40,7 +40,7 @@
  *     Changes: Grzegorz Milos,Sun Microsystems, Inc., summer intern 2007.
  *            : Mick Jordan, Sun Microsystems, Inc.
  *
- *        Date: Aug 2003, changes Aug 2005, 2008, 2009
+ *        Date: Aug 2003, changes Aug 2005, 2008, 2009, 2010
  *
  * Environment: Guest VM microkernel evolved from Xen Minimal OS
  * Description: page allocator
@@ -84,6 +84,8 @@
 #include <lib.h>
 #include <bitmap.h>
 //#define MM_DEBUG
+// uncomment this to crash on allocation failure
+//#define MM_CRASH_ON_FAILURE
 
 /*
  * The functions here should now really be considered as allocating "physical"
@@ -443,8 +445,15 @@ void guk_dump_page_pool_state(void) {
 static long increase_memory_holding_lock(unsigned long n) {
   long result = 0;
   if (in_increase_memory) {
+#ifdef MM_CRASH_ON_FAILURE
     static_dump_page_pool_state(xprintk);
     crash_exit_msg("recursive entry to increase_memory");
+#else
+    xprintk("recursive entry to increase_memory\n");
+    backtrace(get_bp(), 0);
+    in_increase_memory = 0;
+    return 0;
+#endif
   } else {
     in_increase_memory = 1;
   }
@@ -586,6 +595,7 @@ long guk_decrease_page_pool(unsigned long n) {
 
 /*
  * Allocate n contiguous pages. Returns a VIRTUAL/PHYSICAL address.
+ * Returns 0 if failure.
  */
 static unsigned long _allocate_pages(int n, int type)
 {
@@ -656,7 +666,11 @@ static unsigned long _allocate_pages(int n, int type)
       ttprintk("APX %lx %d %d %d\n", result, n, first_free_page, first_free_bulk_page);
     }
     if (result == 0 && !initial_is_bulk_alloc) {
+#ifdef MM_CRASH_ON_FAILURE
       crash_exit_msg("failed to allocate small pages");
+#else
+      xprintk("failed to allocate %d small pages of type %d\n", n, type);
+#endif
     }
     return result;
 }
@@ -669,12 +683,7 @@ unsigned long alloc_pages(int order) {
 /* Allocate n contiguous pages. Returns a VIRTUAL address.
 */
 unsigned long guk_allocate_pages(int n, int type) {
-	unsigned long result = _allocate_pages(n, type);
-	if (result == 0) {
-		xprintk("guk_allocate_pages failed %d %d\n", n, type);
-		crash_exit_backtrace();
-	}
-  return result;
+	return _allocate_pages(n, type);
 }
 
 unsigned long guk_extend_allocate_pages(void *pointer, int n, int type) {
@@ -783,20 +792,24 @@ static long increase_reservation(unsigned long nr_pages, memory_hole_t *memory_h
     long rc = HYPERVISOR_memory_op(XENMEM_populate_physmap, &reservation);
     /* rc is the number actually allocated, if we get less return whatever we got */
     if (rc > 0) {
-	struct pfn_alloc_env pfn_frame_alloc_env = {
-	  .pfn_alloc = pfn_alloc_alloc
-	};
+	    struct pfn_alloc_env pfn_frame_alloc_env = {
+	      .pfn_alloc = pfn_alloc_alloc
+	    };
 
-	struct pfn_alloc_env pfn_linear_tomap_env = {
-	  .pfn_alloc = pfn_linear_alloc
-	};
+	    struct pfn_alloc_env pfn_linear_tomap_env = {
+	      .pfn_alloc = pfn_linear_alloc
+	    };
 
-	pfn_linear_tomap_env.pfn = start_pfn;
-	build_pagetable(pfn_to_virtu(start_pfn), pfn_to_virtu(start_pfn + rc),
-			&pfn_linear_tomap_env, &pfn_frame_alloc_env);
-	arch_update_p2m(start_pfn, start_pfn + rc, 1);
+	    pfn_linear_tomap_env.pfn = start_pfn;
+	    if (build_pagetable(pfn_to_virtu(start_pfn), pfn_to_virtu(start_pfn + rc),
+	  		    &pfn_linear_tomap_env, &pfn_frame_alloc_env)) {
+	        arch_update_p2m(start_pfn, start_pfn + rc, 1);
+	    } else {
+	    	// fairly catastrophic, don't have enough free pages to map the new memory!
+	    	// should find a way to prevent this ever happening.
+	    	rc = 0;
+	    }
     }
-    //xprintk(".. returned %d\n", rc);
     return rc;
 }
 
