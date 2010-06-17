@@ -126,7 +126,8 @@ struct thread {
     struct list_head  ready_list; /* links thread into run queue, zombie queue, joiner queue */
     struct list_head  joiners; /* list of threads that wait for this thread to die */
     struct list_head  aux_thread_list; /* not really needed, could use ready_list */
-    void *db_data;                 /* debugger may store info here */  
+    void *db_data;                 /* debugger may store info here */
+    unsigned long     r14;
 };
 
 extern struct list_head thread_list; /* a list of threads in the system */

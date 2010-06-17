@@ -606,6 +606,12 @@ static inline struct thread *pick_thread(struct thread *prev, int cpu)
     return next;
 }
 
+#define save_r14 \
+    "mov %%r14, %[sr14]"
+
+#define restore_r14 \
+    "mov %[sr14], %%r14"
+
 /*
  * main scheduler function
  */
@@ -660,8 +666,8 @@ void guk_schedule(void)
        interrupted at the return instruction. And therefore at safe point. */
     if(prev != next) {
       if (trace_sched()) {
-        ttprintk("TS %d %d %ld %ld\n",
-                prev->id, next->id, next->resched_running_time, NOW());
+        ttprintk("TS %d %d %ld\n",
+                prev->id, next->id, next->resched_running_time);
       }
         /* Setting current_thread in the cpu private structure needs to be
          * atomic with respect to interrupts */
@@ -672,10 +678,12 @@ void guk_schedule(void)
 	  struct fp_regs *fpregs = prev->fpregs;
 	  asm (save_fp_regs_asm : : [fpr] "r" (fpregs));
 	}
+        asm (save_r14 : [sr14] "=m" (prev->r14));
 	if (1/*!is_ukernel(next)*/) {
 	  struct fp_regs *fpregs = next->fpregs;
 	  asm (restore_fp_regs_asm : : [fpr] "r" (fpregs));
 	}
+	asm (restore_r14 : : [sr14] "m" (next->r14));
         switch_threads(prev, next, prev);
 
         /* We running on the new thread's stack now.
@@ -690,8 +698,8 @@ void guk_schedule(void)
         switch_thread_in(prev);
     } else {
       if (trace_sched()) {
-        ttprintk("TS %d %d %ld %ld\n",
-                prev->id, next->id, next->resched_running_time, NOW());
+        ttprintk("TS %d %d %ld\n",
+                prev->id, next->id, next->resched_running_time);
       }
     }
 

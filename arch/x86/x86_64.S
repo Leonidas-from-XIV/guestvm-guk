@@ -498,3 +498,7 @@ ENTRY(getpcreg)
 ENTRY(getbpreg)
 	movq %rbp, %rax
 	ret
+
+ENTRY(getr14reg)
+	movq %r14, %rax
+	ret
