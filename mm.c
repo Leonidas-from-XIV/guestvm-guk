@@ -507,8 +507,8 @@ long guk_increase_page_pool(unsigned long n) {
 /* Returns the total amount of (bulk) memory that could be released from the page pool */
 unsigned long guk_decreaseable_page_pool(void) {
     spin_lock(&bitmap_lock);
-    int page = end_alloc_page - 1;
-    int n = 0;
+    unsigned long page = end_alloc_page - 1;
+    unsigned long n = 0;
     while (page >= first_bulk_page) {
       if (!allocated_in_map(alloc_bitmap, page)) {
 	while (!allocated_in_map(alloc_bitmap, page) && (page >= first_bulk_page)) {
@@ -551,7 +551,7 @@ long guk_decrease_page_pool(unsigned long n) {
     while (page >= first_bulk_page && n > 0) {
       if (!allocated_in_map(alloc_bitmap, page)) {
 	unsigned long npage = page;
-	int nn = 0;
+	unsigned long nn = 0;
 	npage = page + 1;
 	while (!allocated_in_map(alloc_bitmap, page) && (page >= first_bulk_page) && (nn < n)) {
 	  page--; nn++;
@@ -599,7 +599,7 @@ long guk_decrease_page_pool(unsigned long n) {
  */
 static unsigned long _allocate_pages(int n, int type)
 {
-    int page;
+    unsigned long page;
     unsigned long result = 0;
     int is_bulk_alloc = is_bulk(n);
     int initial_is_bulk_alloc = is_bulk_alloc;
@@ -616,7 +616,7 @@ static unsigned long _allocate_pages(int n, int type)
       while (page < end_page) {
         if (!allocated_in_map(alloc_bitmap, page)) {
 	  int nn = n;
-	  int npage = page + 1;
+	  unsigned long npage = page + 1;
 	  while (nn > 1 && (npage < end_page)) {
 	    if (!allocated_in_map(alloc_bitmap, npage)) {
 	      nn--; npage++;
@@ -753,7 +753,7 @@ unsigned long guk_pagetable_base(void) {
  */
 void resize_phys_to_machine_mapping_table(void) {
   if (max_end_alloc_page > end_alloc_page) {
-    int new_phys_to_machine_mapping_size = round_pgup(max_end_alloc_page * sizeof(long)) / PAGE_SIZE;
+    unsigned long new_phys_to_machine_mapping_size = round_pgup(max_end_alloc_page * sizeof(long)) / PAGE_SIZE;
     unsigned long *new_phys_to_machine_mapping =
       (unsigned long *) allocate_pages(new_phys_to_machine_mapping_size, DATA_VM);
     if (new_phys_to_machine_mapping == 0) {
