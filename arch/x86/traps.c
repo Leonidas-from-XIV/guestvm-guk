@@ -1,24 +1,24 @@
 /*
  * Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, California 95054, U.S.A. All rights reserved.
- * 
+ *
  * U.S. Government Rights - Commercial software. Government users are
  * subject to the Sun Microsystems, Inc. standard license agreement and
  * applicable provisions of the FAR and its supplements.
- * 
+ *
  * Use is subject to license terms.
- * 
+ *
  * This distribution may include materials developed by third parties.
- * 
+ *
  * Parts of the product may be derived from Berkeley BSD systems,
  * licensed from the University of California. UNIX is a registered
  * trademark in the U.S.  and in other countries, exclusively licensed
  * through X/Open Company, Ltd.
- * 
+ *
  * Sun, Sun Microsystems, the Sun logo and Java are trademarks or
  * registered trademarks of Sun Microsystems, Inc. in the U.S. and other
  * countries.
- * 
+ *
  * This product is covered and controlled by U.S. Export Control laws and
  * may be subject to the export or import laws in other
  * countries. Nuclear, missile, chemical biological weapons or nuclear
@@ -27,7 +27,7 @@
  * U.S. embargo or to entities identified on U.S. export exclusion lists,
  * including, but not limited to, the denied persons and specially
  * designated nationals lists is strictly prohibited.
- * 
+ *
  */
 #include <guk/os.h>
 #include <guk/traps.h>
@@ -94,7 +94,7 @@ void dump_regs(struct pt_regs *regs, printk_function_ptr printk_function) {
 
 void dump_regs_and_stack(struct pt_regs *regs, printk_function_ptr printk_function)
 {
-    struct thread *thread = current;    
+    struct thread *thread = current;
     if (thread)
         (*printk_function)("Thread: %s, %d, CPU=%d\n", thread->name, thread->id, thread->cpu);
 
@@ -120,7 +120,7 @@ void guk_dump_sp(unsigned long *sp, printk_function_ptr printk_function) {
 	  (*printk_function)("(SP) is not mapped\n");
 	  break;
 	}
-      } 
+      }
     }
 }
 
@@ -174,15 +174,12 @@ static fault_handler_t fault_handler_table[] = {
     NULL
 };
 
-/* FIXME: hroeck what for? to detect recursive traps? */
-static int trapped = 0;
-
 #define CHECK_ERROR_INFO(trapnr, str, fname) \
 fault_handler_t check_##fname(struct pt_regs * regs, unsigned long error_code) \
 { \
     struct thread *thread = current; \
     fault_handler_t f = fault_handler_table[trapnr]; \
-    if (trapped || !f || !thread || is_ukernel(thread)) { \
+    if (!f || !thread || is_ukernel(thread)) { \
 	do_trap(trapnr, str, regs, error_code); \
     } \
     return f; \
@@ -205,11 +202,10 @@ DO_ERROR(18, "machine check", machine_check)
 #define read_cr2() \
         (HYPERVISOR_shared_info->vcpu_info[smp_processor_id()].arch.cr2)
 
-int hack_trap = 0;
 void do_page_fault(struct pt_regs *regs, unsigned long error_code)
 {
     unsigned long addr = read_cr2();
-    if (hack_trap || trace_traps()) {
+    if (trace_traps()) {
       tprintk("PF @ %p\n", addr); dump_regs_and_stack(regs, tprintk);
     }
     if (guk_debugging()) {
@@ -222,9 +218,7 @@ void do_page_fault(struct pt_regs *regs, unsigned long error_code)
     }
     /* A real trap of some kind */
     fault_handler_t f = check_page_fault(regs, error_code);
-    trapped = 1;
     (*f)(GENERAL_PROTECTION_FAULT, addr, regs);
-    trapped = 0;
 }
 
 void do_general_protection(struct pt_regs *regs, long error_code)
@@ -237,17 +231,13 @@ void do_general_protection(struct pt_regs *regs, long error_code)
 	tprintk("GPF\n"); dump_regs_and_stack(regs, tprintk);
       }
       fault_handler_t f = check_general_protection(regs, error_code);
-      trapped = 1;
       (*f)(GENERAL_PROTECTION_FAULT, regs->rip, regs);
-      trapped = 0;
       }
 }
 
 void do_divide_error(struct pt_regs * regs, unsigned long error_code) {
   fault_handler_t f = check_divide_error(regs, error_code);
-  trapped = 1;
   (*f)(DIVIDE_ERROR, regs->rip, regs);
-  trapped = 0;
 }
 
 
