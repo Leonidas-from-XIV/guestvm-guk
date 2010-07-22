@@ -1,24 +1,24 @@
 /*
  * Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
  * Clara, California 95054, U.S.A. All rights reserved.
- * 
+ *
  * U.S. Government Rights - Commercial software. Government users are
  * subject to the Sun Microsystems, Inc. standard license agreement and
  * applicable provisions of the FAR and its supplements.
- * 
+ *
  * Use is subject to license terms.
- * 
+ *
  * This distribution may include materials developed by third parties.
- * 
+ *
  * Parts of the product may be derived from Berkeley BSD systems,
  * licensed from the University of California. UNIX is a registered
  * trademark in the U.S.  and in other countries, exclusively licensed
  * through X/Open Company, Ltd.
- * 
+ *
  * Sun, Sun Microsystems, the Sun logo and Java are trademarks or
  * registered trademarks of Sun Microsystems, Inc. in the U.S. and other
  * countries.
- * 
+ *
  * This product is covered and controlled by U.S. Export Control laws and
  * may be subject to the export or import laws in other
  * countries. Nuclear, missile, chemical biological weapons or nuclear
@@ -45,11 +45,11 @@
 #include "db-frontend.h"
 
 /* uncomment next line to build a version that traces all activity to a file in /tmp */
-//#define DUMP_TRACE
+#define DUMP_TRACE
 //#define TRACE_REQ
 
 #ifdef DUMP_TRACE
-static FILE *trace_file = NULL; 
+static FILE *trace_file = NULL;
 #define TRACE(_f, _a...) \
     fprintf(trace_file, "db-frontend, func=%s, line=%d: " _f "\n", __FUNCTION__,  __LINE__, ## _a); \
     fflush(trace_file)
@@ -92,9 +92,9 @@ static int signed_off = 0;
 
 struct dbif_request* get_request(RING_IDX *idx)
 {
-    assert(RING_FREE_REQUESTS(&ring) > 0); 
+    assert(RING_FREE_REQUESTS(&ring) > 0);
     *idx = ring.req_prod_pvt++;
-    
+
     return RING_GET_REQUEST(&ring, *idx);
 }
 
@@ -113,14 +113,14 @@ struct dbif_response *get_response(void)
     RING_IDX prod, cons;
     struct dbif_response *rsp;
     int more;
-    
-wait_again:    
+
+wait_again:
     port = xc_evtchn_pending(evth);
     assert(port == local_evtchn);
     assert(xc_evtchn_unmask(evth, local_evtchn) >= 0);
     if(RING_HAS_UNCONSUMED_RESPONSES(&ring) <= 0)
         goto wait_again;
-    
+
     prod = ring.sring->req_prod;
     xen_rmb();
     cons = ring.rsp_cons;
@@ -379,7 +379,7 @@ int db_single_step(uint16_t thread_id)
     rsp = get_response();
     assert(rsp->id == 13);
     TRACE("ret_val: %lx", rsp->ret_val);
-    
+
     return (int)rsp->ret_val;
 }
 
@@ -434,7 +434,7 @@ struct db_regs* db_get_regs(uint16_t thread_id)
     regs->rbp = db_regs->rbp;
     regs->rbx = db_regs->rbx;
     regs->r11 = db_regs->r11;
-    regs->r10 = db_regs->r10;	
+    regs->r10 = db_regs->r10;
     regs->r9 = db_regs->r9;
     regs->r8 = db_regs->r8;
     regs->rax = db_regs->rax;
@@ -444,7 +444,7 @@ struct db_regs* db_get_regs(uint16_t thread_id)
     regs->rdi = db_regs->rdi;
     regs->rip = db_regs->rip;
     regs->flags = db_regs->flags;
-    regs->rsp = db_regs->rsp; 
+    regs->rsp = db_regs->rsp;
 
     TRACE("Regs: r15=%llx, "
                 "r14=%llx, "
@@ -464,7 +464,7 @@ struct db_regs* db_get_regs(uint16_t thread_id)
                 "rip=%llx, "
                 "flags=%llx, "
                 "rsp=%llx.",
-                 db_regs->r15, 
+                 db_regs->r15,
                  db_regs->r14,
                  db_regs->r13,
                  db_regs->r12,
@@ -540,7 +540,7 @@ int db_set_ip(uint16_t thread_id, uint64_t ip)
     return (int)rsp->ret_val;
 }
 
-int db_get_thread_stack(uint16_t thread_id, 
+int db_get_thread_stack(uint16_t thread_id,
                      uint64_t *stack_start,
                      uint64_t *stack_size)
 {
@@ -702,10 +702,11 @@ int db_attach(int domain_id)
     int ss2 = sizeof(struct dbif_response);
 #ifdef DUMP_TRACE
     char buffer[256];
-    
+
     sprintf(buffer, "/tmp/db-front-trace-%d", domain_id);
     trace_file = fopen(buffer, "w");
 #endif
+    signed_off = 0;
     dom_id = domain_id;
     /* Open the connection to XenStore first */
     xsh = xs_domain_open();
@@ -714,12 +715,11 @@ int db_attach(int domain_id)
     //printf("db_attach ret=%d\n", ret);
     //assert(ret == 0);
     if (ret != 0) return ret;
-    //printf("Connected to the debugging backend (gref=%d, evtchn=%d, dgref=%d).\n",
-    //        gref, evtchn, dgref);
+    //printf("Connected to the debugging backend (gref=%d, evtchn=%d, dgref=%d).\n", gref, evtchn, dgref);
 
     gnth = xc_gnttab_open();
     assert(gnth != -1);
-    /* Map the page and create frontend ring */ 
+    /* Map the page and create frontend ring */
     sring = xc_gnttab_map_grant_ref(gnth, dom_id, gref, PROT_READ | PROT_WRITE);
     FRONT_RING_INIT(&ring, sring, PAGE_SIZE);
     /* Map the data page */
@@ -728,8 +728,7 @@ int db_attach(int domain_id)
     assert(evth != -1);
 
     local_evtchn = xc_evtchn_bind_interdomain(evth, dom_id, evtchn);
-    
-     
+
     return ret;
 }
 
