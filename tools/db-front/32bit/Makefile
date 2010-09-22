@@ -79,7 +79,7 @@ CFLAGS   += -D_GNU_SOURCE
 CFLAGS   += -Wp,-MD,.$(@F).d
 DEPS      = .*.d
 
-LIBS      := -L. -L $(XEN_LIBS32) -lxenctrl -lxenstore
+LIBS      := -L. -L$(XEN_LIBS32) -lxenctrl -lxenstore
 
 SRCS      := db-frontend.c db-xenbus.c
 OBJS	  := db-xenbus.o

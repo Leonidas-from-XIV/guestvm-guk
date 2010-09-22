@@ -172,7 +172,7 @@ void* handle_mount(void *data)
         handle_aio_events(mount);
 moretodo:
         rp = mount->ring.sring->req_prod;
-        rmb(); /* Ensure we see queued requests up to 'rp'. */
+        xen_rmb(); /* Ensure we see queued requests up to 'rp'. */
                 
         while ((cons = mount->ring.req_cons) != rp)
         {
@@ -326,11 +326,11 @@ struct fs_export* create_export(char *name, char *export_path)
     return curr_export;
 }
 
-
 int main(int argc, char*argv[])
 {
     struct fs_export *export;
     char *export_name = "/exports";
+    //printf("fsif_request size %d, fsif_response size %d\n", sizeof(struct fsif_request), sizeof(struct fsif_response));
 
     if (argc > 1) sscanf(argv[1], "%d", &trace_level);
     if (argc > 2) export_name = argv[2];

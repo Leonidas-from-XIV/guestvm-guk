@@ -53,6 +53,7 @@
 #include <list.h>
 #include <stdio.h>
 
+//#define FS_DEBUG 1
 #ifdef FS_DEBUG
 #define DEBUG(_f, _a...) \
     printk("GUK(file=fs-front.c, line=%d) " _f "\n", __LINE__, ## _a)
@@ -1110,14 +1111,16 @@ static void add_export(struct list_head *exports, unsigned int domid)
 		sprintf(path, "%s/%d/path", node, export_id);
 		msg = xenbus_read(XBT_NIL, path, &import->path);
 		if (msg) {
-		    printk("%s %d ERROR reading xenbus: %s\n", __FILE__, __LINE__, msg);
+		    printk("%s %d ERROR reading xenbus : %s\n", __FILE__, __LINE__, msg);
 		    goto exit;
 		}
+
 
             import->export_id = export_id;
             import->import_id = import_id++;
             INIT_LIST_HEAD(&import->list);
             list_add(&import->list, exports);
+
         }
         free(exports_list[j]);
         j++;
@@ -1212,8 +1215,8 @@ static void init_fs_frontend(int test)
         import = list_entry(entry, struct fs_import, list);
 
         if (trace_fs_front())
-	    tprintk("FS export [dom=%d, id=%d] found\n",
-                import->dom_id, import->export_id);
+	    tprintk("FS export [dom=%d, id=%d, path=%s] found\n",
+                import->dom_id, import->export_id, import->path);
 
         if(init_fs_import(import, test)) {
 	    fs_init = 2;
@@ -1228,9 +1231,9 @@ struct list_head *guk_fs_get_imports(void) {
     sleep(1000);
   }
 
-  if (fs_init == 1)
-      return exports.next;
-  else
+  if (fs_init == 1) {
+      return &exports;
+  } else
       return NULL;
 }
 

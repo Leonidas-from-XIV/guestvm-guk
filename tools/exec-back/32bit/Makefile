@@ -35,53 +35,54 @@ endif
 
 OSNAME ?= $(shell uname -s)
 ifneq ($(OSNAME),Linux)
-  $(error "db-front can only be built and installed in a Linux guest")
+  $(error "exec-back can only be built and installed in a Linux guest")
 endif
 
 OSARCH ?= $(shell arch)
 ifneq ($(OSARCH),x86_64)
-  $(error "fs-back must be compiled on a 64-bit system")
+  $(error "exec-back must be compiled on a 64-bit system")
+endif
+
+ifndef XEN_LIBS32
+  $(error "Must set XEN_LIBS32 to directory containing 32 bit versions of libxenstore...")
 endif
 
 include $(XEN_ROOT)/tools/Rules.mk
 
 INCLUDES += -I.
 
-IBIN         = fs-backend 
+IBIN         = exec-backend 
 INST_DIR     = /usr/sbin
 
+CFLAGS   = -m32
 CFLAGS   += -Werror
 CFLAGS   += -Wno-unused
 CFLAGS   += -fno-strict-aliasing
-CFLAGS   += -I $(XEN_ROOT)/tools/include -I $(XEN_LIBXC) -I $(XEN_XENSTORE)
-CFLAGS   += $(INCLUDES)
+CFLAGS   +=  -I $(XEN_ROOT)/tools/include -I $(XEN_LIBXC) -I $(XEN_XENSTORE)
+CFLAGS   += -I.. $(INCLUDES)
 CFLAGS   += -D_GNU_SOURCE
 
 # Get gcc to generate the dependencies for us.
 CFLAGS   += -Wp,-MD,.$(@F).d
 DEPS      = .*.d
 
-LIBS      := -L.
-LIBS      += -L$(XEN_LIBXC)
-LIBS      += -lxenctrl -lpthread -lrt 
-LIBS      += -L$(XEN_XENSTORE) -lxenstore
+LIBS      := -L. -L$(XEN_LIBS32) -lxenctrl -lxenstore -lpthread -lrt 
 
-OBJS	  := fs-xenbus.o fs-ops.o
+OBJS	  := exec-xenbus.o
 
 all: links $(IBIN)
 
 .PHONY: links
 links:	$(ARCH_LINKS)
 	[ -e xen ] || ln -sf $(XEN_ROOT)/xen/include/public xen
+	[ -e exec-xenbus.c ] || ln -sf ../exec-xenbus.c
+	[ -e exec-backend.c ] || ln -sf ../exec-backend.c
 
-fs-backend: $(OBJS) fs-backend.c
-	$(CC) $(CFLAGS) -o fs-backend $(OBJS) $(LIBS) fs-backend.c
+exec-backend: $(OBJS) exec-backend.c
+	$(CC) $(CFLAGS) -o exec-backend $(OBJS) $(LIBS) exec-backend.c
 
 install: all
 	$(INSTALL_PROG) $(IBIN) $(DESTDIR)$(INST_DIR)
-
-%.E: %.c 
-	$(CC) $(CFLAGS) $(CPPFLAGS) -E $< -o $@
 
 clean:
 	rm -rf *.o *~ $(DEPS) xen $(IBIN) $(LIB)

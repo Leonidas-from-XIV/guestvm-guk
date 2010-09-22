@@ -61,34 +61,35 @@
 
 struct fsif_open_request {
     grant_ref_t gref;
-    int flags;
+    int32_t flags;
 };
 
 struct fsif_close_request {
-    int fd;
+    int32_t fd;
 };
 
 struct fsif_read_request {
-    int fd;
+    int32_t fd;
     grant_ref_t gref;
-    ssize_t len;
-    ssize_t offset;
+    uint64_t len;
+    uint64_t offset;
 };
 
 struct fsif_write_request {
-    int fd;
+    int32_t fd;
     grant_ref_t gref;
-    ssize_t len;
-    ssize_t offset;
+    uint64_t len;
+    uint64_t offset;
 };
 
 struct fsif_stat_request {
-    int fd;
+    int32_t fd;
     grant_ref_t gref;
 };
 
 struct fsif_truncate_request {
-    int fd;
+    int32_t fd;
+    uint32_t pad;
     int64_t length;
 };
 
@@ -103,7 +104,7 @@ struct fsif_rename_request {
 };
 
 struct fsif_create_request {
-    int8_t directory;
+    int32_t directory;
     int32_t mode;
     grant_ref_t gref;
 };
@@ -123,7 +124,7 @@ struct fsif_list_request {
 #define HAS_MORE_FLAG   (1ULL << HAS_MORE_SHIFT)
 
 struct fsif_chmod_request {
-    int fd;
+    int32_t fd;
     int32_t mode;
 };
 
@@ -132,14 +133,14 @@ struct fsif_space_request {
 };
 
 struct fsif_sync_request {
-    int fd;
+    int32_t fd;
 };
 
 struct fsif_stat {
-	int    st_mode;    /* protection */
-	int    st_size;    /* total size, in bytes */
-	int    st_blksize; /* blocksize for filesystem I/O */
-	int    st_blocks;  /* number of blocks allocated */
+	int32_t    st_mode;    /* protection */
+	int32_t    st_size;    /* total size, in bytes */
+	int32_t    st_blksize; /* blocksize for filesystem I/O */
+	int32_t   st_blocks;  /* number of blocks allocated */
         int64_t  st_atim;
         int64_t  st_mtim;
         int64_t  st_ctim;
@@ -148,7 +149,9 @@ struct fsif_stat {
 /* FS operation request */
 struct fsif_request {
     uint8_t type;                 /* Type of the request                  */
+    uint8_t pad1;
     uint16_t id;                  /* Request ID, copied to the response   */
+    uint32_t pad2;
     union {
         struct fsif_open_request     fopen;
         struct fsif_close_request    fclose;
@@ -170,6 +173,8 @@ typedef struct fsif_request fsif_request_t;
 /* FS operation response */
 struct fsif_response {
     uint16_t id;
+    uint16_t pad1;
+    uint32_t pad2;
     uint64_t ret_val;
 };
 
