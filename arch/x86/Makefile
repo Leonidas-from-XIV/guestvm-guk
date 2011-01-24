@@ -34,7 +34,7 @@
 # x86_64 only currently.
 #
 
-# include arch.mk has to be before guestvm-ukernel.mk!
+# include arch.mk has to be before guk.mk!
 include $(XEN_ROOT)/Config.mk
 include arch.mk
 include ../../guk.mk
