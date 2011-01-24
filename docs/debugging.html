@@ -1,44 +1,35 @@
 <!--
 #
-# Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
-# Clara, California 95054, U.S.A. All rights reserved.
-# 
-# U.S. Government Rights - Commercial software. Government users are
-# subject to the Sun Microsystems, Inc. standard license agreement and
-# applicable provisions of the FAR and its supplements.
-# 
-# Use is subject to license terms.
-# 
-# This distribution may include materials developed by third parties.
-# 
-# Parts of the product may be derived from Berkeley BSD systems,
-# licensed from the University of California. UNIX is a registered
-# trademark in the U.S.  and in other countries, exclusively licensed
-# through X/Open Company, Ltd.
-# 
-# Sun, Sun Microsystems, the Sun logo and Java are trademarks or
-# registered trademarks of Sun Microsystems, Inc. in the U.S. and other
-# countries.
-# 
-# This product is covered and controlled by U.S. Export Control laws and
-# may be subject to the export or import laws in other
-# countries. Nuclear, missile, chemical biological weapons or nuclear
-# maritime end uses or end users, whether direct or indirect, are
-# strictly prohibited. Export or reexport to countries subject to
-# U.S. embargo or to entities identified on U.S. export exclusion lists,
-# including, but not limited to, the denied persons and specially
-# designated nationals lists is strictly prohibited.
-# 
+# Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+#
+# This code is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 only, as
+# published by the Free Software Foundation.
+#
+# This code is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# version 2 for more details (a copy is included in the LICENSE file that
+# accompanied this code).
+#
+# You should have received a copy of the GNU General Public License version
+# 2 along with this work; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #
 -->
 <HTML>
 <HEAD>
-<TITLE>Project Guest VM: Microkernel: Debugging</TITLE>
+<TITLE>GUK: Debugging</TITLE>
 <BODY>
-<H1>Project Guest VM: Microkernel: Debugging</H1>
+<H1>GUK: Debugging</H1>
 <H2>Introduction</H2>
 
-The Guest VM microkernel supports two debugging mechanisms, interactive debugging
+GUK supports two debugging mechanisms, interactive debugging
 from a separate domain, and trace generation for situations where interactive debugging is
 either inappropriate or impractical.
 
@@ -48,17 +39,20 @@ one domain to debug another, as is normal in the Unix process world, e.g. gdb.
 There has been some progress in this direction lately, from Oracle, but
 the support is not yet part of the standard distribution.
 <p>
-The Maxine VM provides a powerful GUI-based debugger, the Inspector, that 
-supports Maxine development. The Inspector uses similar low-level facilities to gdb, e.g., ptrace
-on Unix systems. It was decided to port the Inspector by to Guest VM by providing explicit
-support in the microkernel for the features required by the Inspector, by implementing a
-a custom frontend/backend driver using the Xen ring communication mechanism.
+The <a href="http://labs.oracle.com/projects/maxine">Maxine VM</a>
+provides a powerful GUI-based debugger, the Inspector, that supports
+Maxine development. The Inspector uses similar low-level facilities to
+gdb, e.g., ptrace on Unix systems. It was decided to port the
+Inspector to the Virtual Edition by providing explicit support in the
+microkernel for the features required by the Inspector, by
+implementing a a custom frontend/backend driver using the Xen ring
+communication mechanism.
 
 <H3>Implementation Details</H3>
 
-The GuestVM microkernel communicates with the debugger via a ring.  The debugger puts
+GUK communicates with the debugger via a ring.  The debugger puts
 requests on the ring and a debug threads collects the requests and parses
-them.  GuestVM microkernel supports 16 types of requests, defined in tools/db-front/dbif.h:
+them. GUK supports 16 types of requests, defined in tools/db-front/dbif.h:
 
 <pre>
 <code>
@@ -71,7 +65,7 @@ REQ_SINGLE_STEP_THREAD /* request to single step a thread */
 REQ_GET_REGS           /* get the register contents of a thread */
 REQ_SET_IP             /* set the instruction pointer of a thread */
 REQ_GET_THREAD_STACK   /* get the address of a thread */
-REQ_APP_SPECIFIC1      /* weak symbol, not used in GuestVM microkernel */
+REQ_APP_SPECIFIC1      /* weak symbol, not used in GUK */
 REQ_READBYTES  /* read a number of bytes starting at a specified address */
 REQ_WRITEBYTES /* write bytes starting at a specified address */
 REQ_DB_DEBUG           /* set the debug level for the DEBUG statements */

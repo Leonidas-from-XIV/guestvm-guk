@@ -1,49 +1,40 @@
 <!--
 #
-# Copyright (c) 2009 Sun Microsystems, Inc., 4150 Network Circle, Santa
-# Clara, California 95054, U.S.A. All rights reserved.
-# 
-# U.S. Government Rights - Commercial software. Government users are
-# subject to the Sun Microsystems, Inc. standard license agreement and
-# applicable provisions of the FAR and its supplements.
-# 
-# Use is subject to license terms.
-# 
-# This distribution may include materials developed by third parties.
-# 
-# Parts of the product may be derived from Berkeley BSD systems,
-# licensed from the University of California. UNIX is a registered
-# trademark in the U.S.  and in other countries, exclusively licensed
-# through X/Open Company, Ltd.
-# 
-# Sun, Sun Microsystems, the Sun logo and Java are trademarks or
-# registered trademarks of Sun Microsystems, Inc. in the U.S. and other
-# countries.
-# 
-# This product is covered and controlled by U.S. Export Control laws and
-# may be subject to the export or import laws in other
-# countries. Nuclear, missile, chemical biological weapons or nuclear
-# maritime end uses or end users, whether direct or indirect, are
-# strictly prohibited. Export or reexport to countries subject to
-# U.S. embargo or to entities identified on U.S. export exclusion lists,
-# including, but not limited to, the denied persons and specially
-# designated nationals lists is strictly prohibited.
-# 
+# Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+#
+# This code is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 only, as
+# published by the Free Software Foundation.
+#
+# This code is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# version 2 for more details (a copy is included in the LICENSE file that
+# accompanied this code).
+#
+# You should have received a copy of the GNU General Public License version
+# 2 along with this work; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #
 -->
 <HTML>
 <HEAD>
-<TITLE>Project Guest VM: Microkernel: Thread Scheduling</TITLE>
+<TITLE>GUK: Thread Scheduling</TITLE>
 <BODY>
-<H1>Project Guest VM: Microkernel: Thread Scheduling</H1>
+<H1>GUK: Thread Scheduling</H1>
 <H2>Introduction</H2>
 
-The GuestVM microkernel scheduler is an evolution of the Mini-OS
+The GUK scheduler is an evolution of the Mini-OS
 scheduler that is preemptive and supports multiple cpus; concurrent
 access to global state is serialized with spinlocks.  The scheduler
 has also been extended so that it can, as a runtime option, delegate
 the scheduling of a class of threads to an external agent through a
-simple upcall interface. This is used, for example, in Guest VM to
+simple upcall interface. This is used, for example, in the Maxine Virtual Edition to
 schedule Java threads separately from microkernel threads.  Although
 there is no hardware separation between "kernel" mode and "user" or
 "application" mode in GUK, we will refer to the two schedulers as the
@@ -132,7 +123,7 @@ set.  If the <code>RESCHED_FLAG</code> is set <code>need_resched()</code> return
 #define STEPPING_FLAG           /* Thread is to be single stepped */
 #define DEBUG_SUSPEND_FLAG      /* Thread was actually put to sleep because of REQ_DEBUG_SUSPEND */
 #define INTERRUPTED_FLAG        /* Thread was interrupted during last wait */
-#define UKERNEL_FLAG            /* Thread is a GuestVM microkernel thread */
+#define UKERNEL_FLAG            /* Thread is a GUK thread */
 #define JOIN_FLAG               /* Thread is waiting for joinee */
 #define AUX1_FLAG               /* Predefined spare flag */
 #define AUX2_FLAG               /* Predefined spare flag */
